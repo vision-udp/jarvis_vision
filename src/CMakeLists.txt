@@ -1,0 +1,15 @@
+add_library(jarvis_vision 
+  "jarvis.cpp"
+  )
+
+target_include_directories(jarvis_vision PUBLIC "${CMAKE_SOURCE_DIR}/include")
+
+# The following command lists some features introduced in C++14. 
+# Thereby, CMake induces which must compile the library using a C++ standard >= 14
+target_compile_features(jarvis_vision PUBLIC
+  cxx_generic_lambdas
+  cxx_lambda_init_captures
+  cxx_return_type_deduction
+  )
+
+configure_jarvis_target(jarvis_vision)
