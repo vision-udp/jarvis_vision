@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.3.2 FATAL_ERROR)
 project("Jarvis-Vision" CXX C) # C is needed for FindThreads
 
 # ---------------------------------------
-# Initial config                        
-# --------------------------------------- 
+# Initial config
+# ---------------------------------------
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to Debug")
@@ -14,6 +14,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 find_package(Threads) # Needed for gtest
 find_package(Doxygen)
 find_package(OpenNI2)
+find_package(CustomGLEW)
 find_package(PCL 1.7.2 REQUIRED)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -59,13 +60,13 @@ endfunction()
 add_subdirectory("utils")
 
 # ---------------------------------------
-# Add the Quotient-Filter library  
+# Add the library
 # ---------------------------------------
 
 add_subdirectory("src")
 
 # ---------------------------------------
-# Add the unit tests  
+# Add the unit tests
 # ---------------------------------------
 
 enable_testing()
@@ -76,3 +77,10 @@ add_subdirectory("test")
 # ---------------------------------------
 
 add_subdirectory("doc")
+
+# ---------------------------------------
+# Add tools
+# ---------------------------------------
+
+add_subdirectory("tools")
+
