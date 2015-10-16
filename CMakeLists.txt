@@ -10,10 +10,11 @@ if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 find_package(Threads) # Needed for gtest
 find_package(Doxygen)
-find_package(OpenNI2)
+find_package(TBB REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(PCL 1.7.2 REQUIRED)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -48,7 +49,7 @@ endfunction()
 
 function(add_jarvis_executable TARGET_ID)
   add_executable(${TARGET_ID} ${ARGN})
-  target_link_libraries(${TARGET_ID} jarvis_vision)
+  target_link_libraries(${TARGET_ID} PRIVATE jarvis_vision)
   configure_jarvis_target(${TARGET_ID})
 endfunction()
 
@@ -63,6 +64,12 @@ add_subdirectory("utils")
 # ---------------------------------------
 
 add_subdirectory("src")
+
+# ---------------------------------------
+# Add tools
+# ---------------------------------------
+
+add_subdirectory("tools")
 
 # ---------------------------------------
 # Add the unit tests  
