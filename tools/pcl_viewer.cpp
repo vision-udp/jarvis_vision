@@ -11,38 +11,43 @@ public:
   simple_visualizer() : viewer("3D Viewer") {}
 
   void run() {
+    using pcl::PointCloud;
+    using pcl::PointXYZRGBA;
+    using pcl::OpenNIGrabber;
+    using namespace std::chrono_literals;
+
     viewer.setBackgroundColor(1, 1, 1);
     viewer.addCoordinateSystem(1.0f, "global");
     viewer.initCameraParameters();
     viewer.setCameraPosition(0.0, -0.3, -0.2, 0.0, -0.3, 1.0, 0.0, -1.0, 0.0);
 
-    auto interface = std::make_unique<pcl::OpenNIGrabber>();
+    auto interface = std::make_unique<OpenNIGrabber>();
 
-    boost::function<void(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &)>
-        cb = [&](const auto &cloud) { f_claude = cloud; };
+    boost::function<void(const PointCloud<PointXYZRGBA>::ConstPtr &)> cb = [&](
+        const auto &cloud) { f_claude = cloud; };
     interface->registerCallback(cb);
 
     interface->start();
     while (!viewer.wasStopped()) {
       update_viewer();
       viewer.spinOnce();
-      std::this_thread::sleep_for(std::chrono::milliseconds(40));
+      std::this_thread::sleep_for(40ms);
     }
     interface->stop();
   }
 
 private:
   void update_viewer() {
+    using pcl::visualization::PCL_VISUALIZER_POINT_SIZE;
+
     auto claude = f_claude;
     if (!claude)
       return;
 
-    // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>
-    // color_handler_cloud(claude, 0, 0, 0);
     if (!viewer.updatePointCloud(claude, "claude"))
       viewer.addPointCloud(claude, "claude");
-    viewer.setPointCloudRenderingProperties(
-        pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "claude");
+    viewer.setPointCloudRenderingProperties(PCL_VISUALIZER_POINT_SIZE, 2,
+                                            "claude");
   }
 
 private:
