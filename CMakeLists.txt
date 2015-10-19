@@ -15,7 +15,9 @@ find_package(Threads) # Needed for gtest
 find_package(Doxygen)
 find_package(OpenNI2)
 find_package(CustomGLEW)
-find_package(PCL 1.7.2 REQUIRED)
+find_package(PCL 1.7.2 REQUIRED COMPONENTS 
+  common io visualization features filters sample_consensus
+  search segmentation)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
