@@ -100,7 +100,7 @@ auto find_planes(const typename pcl::PointCloud<Point>::ConstPtr &cloud,
     seg.setMethodType(pcl::SAC_MSAC);
     // seg.setNormalDistanceWeight(0.1);
     seg.setMaxIterations(100);
-    seg.setDistanceThreshold(0.005);
+    seg.setDistanceThreshold(0.003);
     // seg.setRadiusLimits(0.02, 0.15);
     seg.setInputCloud(cloud_filtered);
     seg.setInputNormals(normals);
@@ -159,7 +159,7 @@ auto find_cylinders(const typename pcl::PointCloud<Point>::ConstPtr &cloud,
     // seg.setNormalDistanceWeight(0.1);
     seg.setMaxIterations(5000);
     seg.setDistanceThreshold(0.025);
-    seg.setRadiusLimits(0.02, 1);
+    seg.setRadiusLimits(0.01, 1);
     seg.setInputCloud(cloud_filtered);
     seg.setInputNormals(normals);
     seg.segment(*inliers, coefficients);
@@ -181,6 +181,63 @@ auto find_cylinders(const typename pcl::PointCloud<Point>::ConstPtr &cloud,
     cloud_filtered = statistical_outliner_removal<Point>(new_filtered);
   }
   std::clog << "Found cylinders: " << count << std::endl;
+  return cloud_filtered;
+}
+
+template <typename Point>
+auto find_spheres(const typename pcl::PointCloud<Point>::ConstPtr &cloud,
+                  pcl::PointCloud<Point> &output_cloud) {
+
+  pcl::NormalEstimation<Point, pcl::Normal> ne;
+  pcl::SACSegmentationFromNormals<Point, pcl::Normal> seg;
+  pcl::ExtractIndices<Point> extract;
+
+  auto inliers = boost::make_shared<pcl::PointIndices>();
+  auto cloud_filtered = boost::make_shared<pcl::PointCloud<Point>>(*cloud);
+
+  size_t count = 0;
+  pcl::PointCloud<Point> partial_output;
+  auto normals = boost::make_shared<pcl::PointCloud<pcl::Normal>>();
+  pcl::ModelCoefficients coefficients;
+
+  while (true) {
+    auto tree = boost::make_shared<pcl::search::KdTree<Point>>();
+
+    // Estimate normals
+    ne.setSearchMethod(tree);
+    ne.setInputCloud(cloud_filtered);
+    ne.setKSearch(50);
+    ne.compute(*normals);
+
+    // Segmentation
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_SPHERE);
+    seg.setMethodType(pcl::SAC_MSAC);
+    // seg.setNormalDistanceWeight(0.1);
+    seg.setMaxIterations(5000);
+    seg.setDistanceThreshold(0.025);
+    seg.setRadiusLimits(0.01, 1);
+    seg.setInputCloud(cloud_filtered);
+    seg.setInputNormals(normals);
+    seg.segment(*inliers, coefficients);
+
+    if (inliers->indices.size() < 50)
+      break;
+    ++count;
+
+    extract.setInputCloud(cloud_filtered);
+    extract.setIndices(inliers);
+    extract.setNegative(false);
+    extract.filter(partial_output);
+
+    output_cloud += partial_output;
+
+    auto new_filtered = boost::make_shared<pcl::PointCloud<Point>>();
+    extract.setNegative(true);
+    extract.filter(*new_filtered);
+    cloud_filtered = statistical_outliner_removal<Point>(new_filtered);
+  }
+  std::clog << "Found spheres: " << count << std::endl;
   return cloud_filtered;
 }
 
@@ -224,6 +281,8 @@ public:
 private:
   void update_viewer() {
     using pcl::visualization::PCL_VISUALIZER_POINT_SIZE;
+    using handler_t =
+        pcl::visualization::PointCloudColorHandlerCustom<PointXYZ>;
 
     auto claude = f_claude;
     if (!claude)
@@ -232,18 +291,23 @@ private:
     using cloud_t = pcl::PointCloud<pcl::PointXYZ>;
     auto planes_cloud = boost::make_shared<cloud_t>();
     auto cylinders_cloud = boost::make_shared<cloud_t>();
+    auto spheres_cloud = boost::make_shared<cloud_t>();
+
+    handler_t claude_handler(claude, 255, 128, 255);
 
     claude = passthrough<PointXYZ>(claude);
     claude = downsample<PointXYZ>(claude);
+
+    if (!viewer.updatePointCloud(claude, claude_handler, "claude"))
+      viewer.addPointCloud(claude, claude_handler, "claude");
+
     claude = find_planes(claude, *planes_cloud);
     claude = find_cylinders(claude, *cylinders_cloud);
-
-    using handler_t =
-        pcl::visualization::PointCloudColorHandlerCustom<PointXYZ>;
+    claude = find_spheres(claude, *spheres_cloud);
 
     handler_t plane_handler(planes_cloud, 255, 0, 0);
     handler_t cylinder_handler(cylinders_cloud, 0, 255, 0);
-    handler_t remaining_handler(claude, 0, 0, 255);
+    handler_t sphere_handler(claude, 0, 0, 255);
 
     if (!viewer.updatePointCloud(planes_cloud, plane_handler, "planes"))
       viewer.addPointCloud(planes_cloud, plane_handler, "planes");
@@ -252,8 +316,8 @@ private:
                                  "cylinders"))
       viewer.addPointCloud(cylinders_cloud, cylinder_handler, "cylinders");
 
-    if (!viewer.updatePointCloud(claude, remaining_handler, "claude"))
-      viewer.addPointCloud(claude, remaining_handler, "claude");
+    if (!viewer.updatePointCloud(spheres_cloud, sphere_handler, "spheres"))
+      viewer.addPointCloud(spheres_cloud, sphere_handler, "spheres");
   }
 
   //  void register_keyboard_manager() {
