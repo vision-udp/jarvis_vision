@@ -106,8 +106,7 @@ static void list_device_modes(const char *device_id) {
 #include <iostream>
 #include <cstdlib>
 
-template <typename PointT>
-class pcd_buffer : boost::noncopyable {
+template <typename PointT> class pcd_buffer : boost::noncopyable {
 public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
@@ -176,8 +175,16 @@ private:
   std::atomic_bool &done;
 };
 
-template <typename PointT>
-class pcd_recorder {
+namespace {
+class point_cloud_recorder {
+public:
+  virtual ~point_cloud_recorder() {}
+  virtual void start() {}
+  virtual void stop() {}
+};
+}
+
+template <typename PointT> class pcd_recorder : public point_cloud_recorder {
 public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
@@ -267,11 +274,20 @@ private:
 
 static std::atomic_bool stop_recording(false);
 
+std::unique_ptr<point_cloud_recorder> static make_recorder(
+    const std::string &point_type) {
+  if (point_type == "XYZ")
+    return std::make_unique<pcd_recorder<pcl::PointXYZ>>();
+  if (point_type == "XYZRGBA")
+    return std::make_unique<pcd_recorder<pcl::PointXYZRGBA>>();
+  throw std::domain_error("Unknown point type");
+}
+
 int main(int argc, char *argv[]) {
   using pcl::console::print_error;
   using pcl::console::parse;
   using pcl::console::print_highlight;
-  using namespace std::literals;
+  using namespace std::chrono_literals;
 
   if (argc < 2) {
     print_error("Error: wrong number of arguments\n");
@@ -296,11 +312,16 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  pcd_recorder<pcl::PointXYZ> recorder;
+  std::string point_type = "XYZ"; // Default value
+  parse(argc, argv, "--point_type", point_type);
+
+  std::cout << "Point type: " << point_type << std::endl;
+  const auto recorder = make_recorder(point_type);
+
   std::signal(SIGINT, [](int) { stop_recording = true; });
   while (!stop_recording)
     std::this_thread::sleep_for(500ms);
 
   pcl::console::print_highlight("Exit condition set to true\n");
-  recorder.stop();
+  recorder->stop();
 }
