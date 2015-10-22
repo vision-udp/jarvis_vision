@@ -87,3 +87,8 @@ add_subdirectory("doc")
 
 add_subdirectory("tools")
 
+# ---------------------------------------
+# Add example
+# ---------------------------------------
+
+add_subdirectory("examples")
