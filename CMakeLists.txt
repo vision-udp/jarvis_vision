@@ -15,7 +15,8 @@ find_package(Threads) # Needed for gtest
 find_package(Doxygen)
 find_package(OpenNI2)
 find_package(CustomGLEW)
-find_package(PCL 1.7.2 REQUIRED COMPONENTS 
+find_package(Boost REQUIRED COMPONENTS container)
+find_package(PCL 1.7.2 REQUIRED COMPONENTS
   common io visualization features filters sample_consensus
   search segmentation)
 
