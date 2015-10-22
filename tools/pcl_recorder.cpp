@@ -1,6 +1,9 @@
 /// \file pcl_recorder.cpp
-/// \brief Tool to ...
+/// \brief Tool to write to disk frames grabbed by a OpenNI compatible device.
+///
+/// Based on:
 /// https://github.com/PointCloudLibrary/pcl/blob/master/io/tools/openni_pcd_recorder.cpp
+/// Some more options can be added.
 ///
 /// \author Jorge Aguirre
 /// \version 0.1
