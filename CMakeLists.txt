@@ -13,12 +13,10 @@ endif()
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 find_package(Threads) # Needed for gtest
 find_package(Doxygen)
-find_package(OpenNI2)
-find_package(CustomGLEW)
-find_package(Boost REQUIRED COMPONENTS container)
 find_package(PCL 1.7.2 REQUIRED COMPONENTS
   common io visualization features filters sample_consensus
   search segmentation)
+find_package(Boost 1.58 REQUIRED COMPONENTS program_options)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -52,7 +50,9 @@ endfunction()
 
 function(add_jarvis_executable TARGET_ID)
   add_executable(${TARGET_ID} ${ARGN})
-  target_link_libraries(${TARGET_ID} jarvis_vision)
+  target_link_libraries(${TARGET_ID} PRIVATE jarvis_vision)
+  target_include_directories(${TARGET_ID} PRIVATE ${Boost_INCLUDE_DIRS})
+  target_link_libraries(${TARGET_ID} PRIVATE ${Boost_LIBRARIES})
   configure_jarvis_target(${TARGET_ID})
 endfunction()
 

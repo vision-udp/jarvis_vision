@@ -9,69 +9,36 @@
 /// \version 0.1
 /// \date 2015-10-21
 
+#include "recorder.hpp"
+
 #include <csignal>
 #include <ctime>
 #include <mutex>
 #include <thread>
-
 #include <boost/circular_buffer.hpp>
-
 #include <pcl/console/print.h>
-#include <pcl/console/parse.h>
 #include <pcl/io/openni_grabber.h>
 #include <pcl/io/pcd_io.h>
 
-static void print_usage(const char *program_name) {
-  using pcl::console::print_info;
+using pcl::console::print_info;
+using pcl::console::print_warn;
+using jarvis::recorder;
 
-  print_info("Usage: %s (<device-id> | <path-to-oni-file>) [options]\n",
-             program_name);
-  print_info("Options:\n");
-  print_info("-l,--list : list all available devices\n");
-  print_info("-l,--list <device-id> : list all available modes for specified "
-             "device\n");
-  print_info("-h, --help  : show this help message\n");
-}
+// ============================================
+// Openni Devices information functions
+// ============================================
 
-template <typename... Args>
-bool find_argument(int argc, char *argv[], const char *argument, Args... args) {
-  using pcl::console::find_switch;
-
-  auto find_argument = [](int _argc, char *_argv[], const char *_argument) {
-    return find_switch(_argc, _argv, _argument);
-  };
-
-  return find_switch(argc, argv, argument) ||
-         find_argument(argc, argv, args...);
-}
-
-template <typename... Args>
-int find_argument_pos(int argc, char *argv[], const char *argument,
-                      Args... args) {
-  using pcl::console::find_argument;
-
-  auto find_argument_pos = [](int _argc, char *_argv[], const char *_argument) {
-    return find_argument(_argc, _argv, _argument);
-  };
-
-  auto position = find_argument(argc, argv, argument);
-  return position > 0 ? position : find_argument_pos(argc, argv, args...);
-}
-
-static void list_devices() {
-  using pcl::console::print_info;
-  using pcl::console::print_warn;
-
+void jarvis::list_openni_devices() {
   auto &driver = openni_wrapper::OpenNIDriver::getInstance();
 
-  auto n_devices = driver.getNumberDevices();
+  const unsigned n_devices = driver.getNumberDevices();
   if (n_devices == 0) {
     print_warn("Warning: No connected devices.\n");
     return;
   }
-  print_info("Devices found: %d\n", n_devices);
+  print_info("Found Devices: %d\n", n_devices);
   for (unsigned i = 0; i < n_devices; ++i) {
-    print_info("[%d] Device id: \'#%d\', vendor: %s, product: %s, connected: "
+    print_info("[%u] Device id: \'#%u\', vendor: %s, product: %s, connected: "
                "%#02x@%#02x, serial "
                "number: \'%s\'\n",
                i, i + 1, driver.getVendorName(i), driver.getProductName(i),
@@ -80,9 +47,7 @@ static void list_devices() {
   }
 }
 
-static void list_device_modes(const char *device_id) {
-  using pcl::console::print_info;
-
+void jarvis::show_openni_device_info(const std::string &device_id) {
   pcl::OpenNIGrabber grabber(device_id);
   auto device = grabber.getDevice();
   print_info("Device: %s, %s\n", device->getVendorName(),
@@ -103,10 +68,12 @@ static void list_device_modes(const char *device_id) {
                mode.second.nXRes, mode.second.nFPS);
 }
 
-#include <iostream>
-#include <cstdlib>
+// ============================================
+// pcd_buffer definitions
+// ============================================
 
-template <typename PointT> class pcd_buffer : boost::noncopyable {
+template <typename PointT>
+class pcd_buffer : boost::noncopyable {
 public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
@@ -175,16 +142,13 @@ private:
   std::atomic_bool &done;
 };
 
-namespace {
-class point_cloud_recorder {
-public:
-  virtual ~point_cloud_recorder() {}
-  virtual void start() {}
-  virtual void stop() {}
-};
-}
+// ============================================
+// pcd_recorder definitions
+// ============================================
 
-template <typename PointT> class pcd_recorder : public point_cloud_recorder {
+namespace {
+template <typename PointT>
+class pcd_recorder : public recorder {
 public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
@@ -271,57 +235,23 @@ private:
   frames_producer producer;
   frames_consumer consumer;
 };
+} // end anonymous namespace
 
-static std::atomic_bool stop_recording(false);
+// ============================================
+// recorder definitions and related
+// ============================================
 
-std::unique_ptr<point_cloud_recorder> static make_recorder(
-    const std::string &point_type) {
-  if (point_type == "XYZ")
-    return std::make_unique<pcd_recorder<pcl::PointXYZ>>();
-  if (point_type == "XYZRGBA")
-    return std::make_unique<pcd_recorder<pcl::PointXYZRGBA>>();
-  throw std::domain_error("Unknown point type");
-}
+recorder::~recorder() {}
 
-int main(int argc, char *argv[]) {
-  using pcl::console::print_error;
-  using pcl::console::parse;
-  using pcl::console::print_highlight;
-  using namespace std::chrono_literals;
+void recorder::start() {}
 
-  if (argc < 2) {
-    print_error("Error: wrong number of arguments\n");
-    print_usage(*argv);
-    return -1;
-  }
-
-  if (find_argument(argc, argv, "-h", "--help")) {
-    print_usage(*argv);
-    return 1;
-  }
-
-  if (find_argument(argc, argv, "-l", "--list")) {
-    if (argc >= 3) {
-      if (find_argument_pos(argc, argv, "-l", "--list") != 1) {
-        print_error("Error: wrong arguments order\n");
-        return -1;
-      }
-      list_device_modes(argv[2]);
-    } else
-      list_devices();
-    return 0;
-  }
-
-  std::string point_type = "XYZ"; // Default value
-  parse(argc, argv, "--point_type", point_type);
-
-  std::cout << "Point type: " << point_type << std::endl;
-  const auto recorder = make_recorder(point_type);
-
-  std::signal(SIGINT, [](int) { stop_recording = true; });
-  while (!stop_recording)
-    std::this_thread::sleep_for(500ms);
-
-  pcl::console::print_highlight("Exit condition set to true\n");
-  recorder->stop();
+std::unique_ptr<recorder>
+jarvis::make_pcd_recorder(const std::string &point_type) {
+  using pcl::PointXYZ;
+  using pcl::PointXYZRGBA;
+  if (point_type == "xyz")
+    return std::make_unique<pcd_recorder<PointXYZ>>();
+  if (point_type == "xyzrgba")
+    return std::make_unique<pcd_recorder<PointXYZRGBA>>();
+  throw std::domain_error("Unknown point type: " + point_type);
 }
