@@ -14,29 +14,59 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
+template <typename PointT>
+class pcd_visualizer {
+
+public:
+  using cloud_ptr = typename pcl::PointCloud<PointT>::Ptr;
+
+public:
+  pcd_visualizer(const char *filename) : cloud(new pcl::PointCloud<PointT>) {
+    using pcl::console::print_error;
+    using namespace std::chrono_literals;
+
+    try {
+      pcl::io::loadPCDFile<PointT>(filename, *cloud);
+    } catch (pcl::PCLException e) {
+      print_error("Error reading %s\n", filename);
+    }
+
+    viewer.addPointCloud(cloud, "Cloud");
+
+    while (!viewer.wasStopped()) {
+      std::this_thread::sleep_for(100ms);
+      viewer.spinOnce();
+    }
+  }
+
+private:
+  pcl::visualization::PCLVisualizer viewer;
+  cloud_ptr cloud;
+};
+
 int main(int argc, char *argv[]) {
   using pcl::console::print_error;
-  using namespace std::chrono_literals;
-
   if (argc < 2) {
     print_error("Wrong number of arguments.\n");
     return -1;
   }
 
-  auto cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-
+  pcl::PCLPointCloud2 cloud_meta;
   try {
-    pcl::io::loadPCDFile<pcl::PointXYZ>(argv[1], *cloud);
+    pcl::io::loadPCDFile(argv[1], cloud_meta);
   } catch (pcl::PCLException e) {
-    print_error("Error reading %s\n", argv[1]);
+    print_error("Error reading file %s\n", argv[1]);
   }
 
-  pcl::visualization::PCLVisualizer viewer;
+  std::cerr << "Fields: ";
+  for (const auto &field : cloud_meta.fields)
+    std::cerr << field.name << ' ';
+  std::cerr << '\n';
 
-  viewer.addPointCloud(cloud, "Cloud");
-
-  while (!viewer.wasStopped()) {
-    std::this_thread::sleep_for(100ms);
-    viewer.spinOnce();
-  }
+  if (cloud_meta.fields.size() > 3)
+    pcd_visualizer<pcl::PointXYZRGBA> v(argv[1]);
+  else if (cloud_meta.fields.size() == 3)
+    pcd_visualizer<pcl::PointXYZ> v(argv[1]);
+  else
+    print_error("Unknown type.\n");
 }

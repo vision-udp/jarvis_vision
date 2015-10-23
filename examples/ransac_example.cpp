@@ -320,20 +320,6 @@ private:
       viewer.addPointCloud(spheres_cloud, sphere_handler, "spheres");
   }
 
-  //  void register_keyboard_manager() {
-  //    using pcl::visualization::KeyboardEvent;
-  //    boost::function<void(const KeyboardEvent &)> callback;
-  //    callback = [](const KeyboardEvent &ev) {
-  //      std::cout << "KeyEv" << std::endl;
-  //      if (ev.keyUp())
-  //        return;
-  //      std::cout << "HOLA" << std::endl;
-  //      if (ev.getKeyCode() == 0)
-  //        std::cout << ev.getKeySym() << std::endl;
-  //    };
-  //    viewer.registerKeyboardCallback(callback);
-  //  }
-
 private:
   pcl::PointCloud<pcl::PointXYZ>::ConstPtr f_claude;
   pcl::visualization::PCLVisualizer viewer;
