@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.3.2 FATAL_ERROR)
 project("Jarvis-Vision" CXX C) # C is needed for FindThreads
 
 # ---------------------------------------
-# Initial config                        
-# --------------------------------------- 
+# Initial config
+# ---------------------------------------
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to Debug")
@@ -13,9 +13,10 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 find_package(Threads) # Needed for gtest
 find_package(Doxygen)
-find_package(TBB REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(PCL 1.7.2 REQUIRED)
+find_package(PCL 1.7.2 REQUIRED COMPONENTS
+  common io visualization features filters sample_consensus
+  search segmentation)
+find_package(Boost 1.58 REQUIRED COMPONENTS program_options)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -60,19 +61,13 @@ endfunction()
 add_subdirectory("utils")
 
 # ---------------------------------------
-# Add the Quotient-Filter library  
+# Add the library
 # ---------------------------------------
 
 add_subdirectory("src")
 
 # ---------------------------------------
-# Add tools
-# ---------------------------------------
-
-add_subdirectory("tools")
-
-# ---------------------------------------
-# Add the unit tests  
+# Add the unit tests
 # ---------------------------------------
 
 enable_testing()
@@ -83,3 +78,15 @@ add_subdirectory("test")
 # ---------------------------------------
 
 add_subdirectory("doc")
+
+# ---------------------------------------
+# Add tools
+# ---------------------------------------
+
+add_subdirectory("tools")
+
+# ---------------------------------------
+# Add example
+# ---------------------------------------
+
+add_subdirectory("examples")
