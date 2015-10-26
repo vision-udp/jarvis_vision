@@ -291,7 +291,7 @@ private:
     using cloud_t = pcl::PointCloud<pcl::PointXYZ>;
     auto planes_cloud = boost::make_shared<cloud_t>();
     auto cylinders_cloud = boost::make_shared<cloud_t>();
-    auto spheres_cloud = boost::make_shared<cloud_t>();
+    // auto spheres_cloud = boost::make_shared<cloud_t>();
 
     handler_t claude_handler(claude, 255, 128, 255);
 
@@ -303,7 +303,7 @@ private:
 
     claude = find_planes(claude, *planes_cloud);
     claude = find_cylinders(claude, *cylinders_cloud);
-    claude = find_spheres(claude, *spheres_cloud);
+    // claude = find_spheres(claude, *spheres_cloud);
 
     handler_t plane_handler(planes_cloud, 255, 0, 0);
     handler_t cylinder_handler(cylinders_cloud, 0, 255, 0);
@@ -316,8 +316,9 @@ private:
                                  "cylinders"))
       viewer.addPointCloud(cylinders_cloud, cylinder_handler, "cylinders");
 
-    if (!viewer.updatePointCloud(spheres_cloud, sphere_handler, "spheres"))
-      viewer.addPointCloud(spheres_cloud, sphere_handler, "spheres");
+    //    if (!viewer.updatePointCloud(spheres_cloud, sphere_handler,
+    //    "spheres"))
+    //      viewer.addPointCloud(spheres_cloud, sphere_handler, "spheres");
   }
 
 private:
