@@ -1,24 +1,22 @@
-/// \file pcl_recorder.cpp
-/// \brief Tool to write to disk frames grabbed by a OpenNI compatible device.
-///
-/// Based on:
-/// https://github.com/PointCloudLibrary/pcl/blob/master/io/tools/openni_pcd_recorder.cpp
-/// Some more options can be added.
-///
-/// \author Jorge Aguirre
-/// \version 0.1
-/// \date 2015-10-21
+//          Copyright Diego Ramírez October 2015
+// Distributed under the Boost Software License, Version 1.0.
+//    (See accompanying file LICENSE_1_0.txt or copy at
+//          http://www.boost.org/LICENSE_1_0.txt)
 
 #include "recorder.hpp"
 
-#include <csignal>
-#include <ctime>
-#include <mutex>
-#include <thread>
-#include <boost/circular_buffer.hpp>
+#include <atomic> // For std::atomic
+#include <future> // For std::async, std::future
+#include <cstdio> // For std::sprintf
+
 #include <pcl/console/print.h>
 #include <pcl/io/openni_grabber.h>
 #include <pcl/io/pcd_io.h>
+
+#include <tbb/concurrent_queue.h>
+#include <tbb/pipeline.h>
+
+#include <iostream> // TEMPORAL
 
 using pcl::console::print_info;
 using pcl::console::print_warn;
@@ -69,78 +67,54 @@ void jarvis::show_openni_device_info(const std::string &device_id) {
 }
 
 // ============================================
-// pcd_buffer definitions
+// openni_grabber definitions
 // ============================================
 
+namespace {
 template <typename PointT>
-class pcd_buffer : boost::noncopyable {
+class openni_grabber {
 public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
 
 public:
-  pcd_buffer(std::size_t buffer_size, std::atomic_bool &is_done)
-      : buffer(buffer_size), done(is_done) {}
+  openni_grabber() {
+    queue.set_capacity(5);
+    grabber = std::make_unique<pcl::OpenNIGrabber>();
+    boost::function<void(const cloud_ptr &)> callback;
+    callback = [&](const cloud_ptr &cloud) { queue.try_push(cloud); };
+    grabber->registerCallback(callback);
+  }
 
-  bool push_back(cloud_ptr cloud) {
-    bool not_full = false;
-    {
-      std::lock_guard<std::mutex> lock(buff_mutex);
-      not_full = !buffer.full();
-      buffer.push_back(cloud);
+  ~openni_grabber() { stop(); }
+
+  bool grab(cloud_ptr &cloud) {
+    if (stopped)
+      return false;
+    try {
+      queue.pop(cloud);
+      return true;
+    } catch (tbb::user_abort &) {
+      assert(stopped.load(std::memory_order_relaxed));
+      return false;
     }
-    buff_empty.notify_one();
-    return not_full;
   }
 
-  const cloud_ptr front() {
-    using namespace std::literals;
-    cloud_ptr cloud;
-    std::unique_lock<std::mutex> lock(buff_mutex);
-
-    while (buffer.empty() && !done)
-      buff_empty.wait_for(lock, 100ms, [&] { return !buffer.empty() || done; });
-
-    if (buffer.empty()) {
-      lock.unlock();
-      return nullptr;
-    }
-
-    cloud = buffer.front();
-    buffer.pop_front();
-    lock.unlock();
-
-    return cloud;
-  }
-
-  bool empty() {
-    std::lock_guard<std::mutex> lock(buff_mutex);
-    return buffer.empty();
-  }
-
-  bool full() {
-    std::lock_guard<std::mutex> lock(buff_mutex);
-    return buffer.full();
-  }
-
-  std::size_t size() {
-    std::lock_guard<std::mutex> lock(buff_mutex);
-    buffer.size();
-  }
-
-  std::size_t capacity() const { return buffer.capacity(); }
-
-  void capacity(std::size_t buff_size) {
-    std::lock_guard<std::mutex> lock(buff_mutex);
-    buffer.set_capacity(buff_size);
+  void stop() {
+    if (stopped)
+      return;
+    stopped = true;
+    grabber->stop();
+    queue.abort();
+    queue.clear();
   }
 
 private:
-  std::mutex buff_mutex;
-  boost::circular_buffer<cloud_ptr> buffer;
-  std::condition_variable buff_empty;
-  std::atomic_bool &done;
+  tbb::concurrent_bounded_queue<cloud_ptr> queue;
+  std::unique_ptr<pcl::Grabber> grabber;
+  std::atomic<bool> stopped{false};
 };
+} // end anonymous namespace
 
 // ============================================
 // pcd_recorder definitions
@@ -153,87 +127,56 @@ public:
   using point_t = PointT;
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
 
-private:
-  class frames_producer {
-  public:
-    frames_producer(pcd_buffer<PointT> &buff, std::atomic_bool &is_done)
-        : buffer(buff),
-          worker(std::bind(&frames_producer::grab_and_send, this)),
-          done(is_done) {}
-
-    void stop() { worker.join(); }
-
-  private:
-    void grab_and_send() {
-      using namespace std::literals;
-      auto grabber = std::make_unique<pcl::OpenNIGrabber>();
-      boost::function<void(const cloud_ptr &)> callback;
-      callback = [&](const cloud_ptr &cloud) { buffer.push_back(cloud); };
-      grabber->registerCallback(callback);
-
-      while (!done)
-        std::this_thread::sleep_for(1s);
-
-      grabber->stop();
-    }
-
-  private:
-    pcd_buffer<PointT> &buffer;
-    std::thread worker;
-    std::atomic_bool &done;
-  };
-
-  class frames_consumer {
-  public:
-    frames_consumer(pcd_buffer<point_t> &buff, std::atomic_bool &is_done)
-        : buffer(buff),
-          worker(std::bind(&frames_consumer::receive_and_process, this)),
-          done(is_done) {}
-
-    void stop() { worker.join(); }
-
-  private:
-    void receive_and_process() {
-      while (!done) {
-        write_to_disk(buffer.front());
-      }
-      while (!buffer.empty())
-        write_to_disk(buffer.front());
-    }
-
-    void write_to_disk(const cloud_ptr &cloud) {
-      if (!cloud)
-        return;
-
-      std::time_t t = std::time(nullptr);
-      std::stringstream ss;
-      ss << "frame_" << std::put_time(std::localtime(&t), "%H%M%S") << ".pcd";
-      writer.writeBinaryCompressed(ss.str(), *cloud);
-    }
-
-  private:
-    pcd_buffer<point_t> &buffer;
-    std::thread worker;
-    pcl::PCDWriter writer;
-    std::atomic_bool &done;
-  };
-
 public:
-  pcd_recorder(std::size_t buffer_size = 200)
-      : done{false}, buffer(buffer_size, done), producer(buffer, done),
-        consumer(buffer, done) {}
+  pcd_recorder() {}
+  ~pcd_recorder() { stop(); }
 
-  void stop() {
-    done = true;
-    producer.stop();
-    consumer.stop();
+  void start() override {
+    pipeline_execution =
+        std::async(std::launch::async, &pcd_recorder::run_pipeline, this);
+  }
+
+  void stop() override {
+    if (!pipeline_execution.valid())
+      return;
+    cloud_grabber.stop();
+    pipeline_execution.get();
   }
 
 private:
-  std::atomic_bool done;
-  pcd_buffer<point_t> buffer;
-  frames_producer producer;
-  frames_consumer consumer;
+  void run_pipeline() {
+    using tbb::filter;
+    using tbb::make_filter;
+
+    auto consumer = [this](tbb::flow_control &fc) -> cloud_ptr {
+      cloud_ptr cloud;
+      if (cloud_grabber.grab(cloud))
+        return cloud;
+      fc.stop();
+      return nullptr;
+    };
+
+    size_t written_files = 0;
+    auto producer = [this, &written_files](const cloud_ptr &cloud) {
+      char filename[128];
+      std::sprintf(filename, "pcd_frames/frame_%06zu.pcd", ++written_files);
+      cloud_writer.writeBinaryCompressed(filename, *cloud);
+      std::clog << "\rNumber of written PCD files: " << written_files;
+    };
+
+    const size_t max_number_of_live_tokens = 16;
+    tbb::parallel_pipeline(
+        max_number_of_live_tokens,
+        make_filter<void, cloud_ptr>(filter::serial_in_order, consumer) &
+            make_filter<cloud_ptr, void>(filter::serial_in_order, producer));
+
+    std::clog << std::endl;
+  }
+
+private:
+  openni_grabber<point_t> cloud_grabber;
+  pcl::PCDWriter cloud_writer;
+  std::future<void> pipeline_execution;
 };
 } // end anonymous namespace
 
@@ -242,8 +185,6 @@ private:
 // ============================================
 
 recorder::~recorder() {}
-
-void recorder::start() {}
 
 std::unique_ptr<recorder>
 jarvis::make_pcd_recorder(const std::string &point_type) {

@@ -17,7 +17,7 @@ void show_openni_device_info(const std::string &device_id);
 class recorder {
 public:
   virtual ~recorder();
-  virtual void start();
+  virtual void start() = 0;
   virtual void stop() = 0;
 };
 

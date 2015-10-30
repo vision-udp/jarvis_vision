@@ -51,24 +51,32 @@ static int main_program(int argc, char *argv[]) {
   const auto &point_type = vm["point-type"].as<std::string>();
   std::clog << "Selected point type: " << point_type << '\n';
 
+  std::clog << "Creating recorder . . . " << std::endl;
   const auto recorder = jarvis::make_pcd_recorder(point_type);
+
+  std::clog << "Starting recorder" << std::endl;
   recorder->start();
 
-  static std::atomic<bool> signaled{false};
-  std::signal(SIGINT, [](int) { signaled = true; });
-  while (!signaled)
-    std::this_thread::sleep_for(500ms);
+  // static std::atomic<bool> signaled{false};
+  //  std::signal(SIGINT, [](int) { signaled = true; });
+  //  while (!signaled)
+  //    std::this_thread::sleep_for(500ms);
+  //
+  //  std::clog << "Termination signal received! Wait for resource cleaning :)"
+  //            << std::endl;
+  //
+  //  std::signal(SIGINT, [](int) {
+  //    std::clog << "Wait while the program frees acquired resources!"
+  //              << std::endl;
+  //  });
 
-  std::clog << "Termination signal received! Wait for resource cleaning :)"
-            << std::endl;
+  std::clog << "The recorder is running!\n";
+  std::clog << "Press ENTER to stop it." << std::endl;
+  std::cin.get();
 
-  std::signal(SIGINT, [](int) {
-    std::clog << "Wait while the program frees acquired resources!"
-              << std::endl;
-  });
-
+  std::clog << "Stopping recorder" << std::endl;
   recorder->stop();
-
+  std::clog << "All done!" << std::endl;
   return 0;
 }
 
