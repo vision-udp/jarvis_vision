@@ -159,7 +159,7 @@ private:
     size_t written_files = 0;
     auto producer = [this, &written_files](const cloud_ptr &cloud) {
       char filename[128];
-      std::sprintf(filename, "pcd_frames/frame_%06zu.pcd", ++written_files);
+      std::sprintf(filename, "frame_%06zu.pcd", ++written_files);
       cloud_writer.writeBinaryCompressed(filename, *cloud);
       std::clog << "\rNumber of written PCD files: " << written_files;
     };
