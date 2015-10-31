@@ -6,6 +6,7 @@
 #ifndef TOOLS_PCD_RECORDER_RECORDER_HPP
 #define TOOLS_PCD_RECORDER_RECORDER_HPP
 
+#include <chrono> // For std::chrono::milliseconds
 #include <memory> // For std::unique_ptr
 #include <string> // For std::string
 
@@ -18,10 +19,15 @@ class recorder {
 public:
   virtual ~recorder();
   virtual void start() = 0;
+
+  // Returns true if execution is ready.
+  virtual bool wait_for(const std::chrono::milliseconds &) = 0;
+
   virtual void stop() = 0;
 };
 
-std::unique_ptr<recorder> make_pcd_recorder(const std::string &point_type);
+std::unique_ptr<recorder> make_pcd_recorder(const std::string &point_type,
+                                            std::size_t max_num_frames);
 
 } // end namespace jarvis
 

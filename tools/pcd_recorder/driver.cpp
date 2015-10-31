@@ -6,20 +6,20 @@
 #include "recorder.hpp"
 
 #include <atomic>    // for std::atomic
-#include <exception> // for std::exception
-#include <iostream>  // for std::clog
 #include <chrono>    // for std::chrono_literals
+#include <exception> // for std::exception
+#include <iostream>  // for std::clog, std::cin
 #include <string>    // for std::string
-#include <thread>    // for std::sleep_for
 #include <cassert>   // for assert
 #include <csignal>   // for std::signal
+#include <cstdlib>   // for EXIT_SUCESS, EXIT_FAILURE
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
-using namespace std::chrono_literals;
+using std::clog;
 
 namespace {
 class options_driver {
@@ -34,7 +34,9 @@ public:
         ("get-info", po::value<std::string>(),
          "Get information about an OpenNi device") // op4
         ("point-type,t", po::value<std::string>()->default_value("xyz"),
-         "Point type to use"); // op5
+         "Point type to use") // op5
+        ("take,n", po::value<std::size_t>()->default_value(0),
+         "Number of frames to take (0 = infinity)."); // op6
 
     hidden_options.add_options()("output-directory", po::value<std::string>());
     options.add(visible_options).add(hidden_options);
@@ -55,7 +57,6 @@ public:
     po::command_line_parser parser(argc, argv);
     parser.options(options).positional(pos_options).style(parser_style);
     po::store(parser.run(), varmap);
-    po::notify(varmap);
   }
 
 private:
@@ -74,9 +75,9 @@ static std::string read_line() {
 }
 
 static void list_point_types() {
-  std::clog << "The available point types are:\n";
-  std::clog << "xyz:     for no color points.\n";
-  std::clog << "xyzrgba: for colored points.\n";
+  clog << "The available point types are:\n";
+  clog << "xyz:     for no color points.\n";
+  clog << "xyzrgba: for colored points.\n";
 }
 
 static bool create_dirs(const fs::path &path) {
@@ -84,77 +85,73 @@ static bool create_dirs(const fs::path &path) {
     return false;
   if (fs::exists(path)) {
     if (!fs::is_directory(path)) {
-      std::clog << "Error, file exists: " << path << '\n';
+      clog << "Error, file exists: " << path << '\n';
       return false;
     }
-    std::clog << "Directory already exists. Some files could be overwritten "
-                 "by the generated pcd files.\n";
+    clog << "Directory already exists. Some files could be overwritten "
+            "by the generated pcd files.\n";
 
     while (true) {
-      std::clog << "Continue? [y, N] " << std::flush;
+      clog << "Continue? [y, N] " << std::flush;
       const std::string ans = read_line();
       if (ans == "y" || ans == "Y") {
-        std::clog << "Ok, the existing directory will be used." << std::endl;
+        clog << "Ok, the existing directory will be used." << std::endl;
         return true;
       }
       if (ans.empty() || ans == "n" || ans == "N") {
-        std::clog << "Ok, program aborted." << std::endl;
+        clog << "Ok, program aborted." << std::endl;
         return false;
       }
-      std::clog << "Invalid answer. Respond 'y' or 'n'.\n";
+      clog << "Invalid answer. Respond 'y' or 'n'.\n";
     }
   }
   // If path does not exists...
   fs::path root = fs::absolute(path.parent_path());
   while (!fs::exists(root)) {
     root = root.parent_path();
-    std::clog << root << std::endl;
+    clog << root << std::endl;
   }
   if (!fs::is_directory(root)) {
-    std::clog << "Error: " << root << " is not a directory." << std::endl;
+    clog << "Error: " << root << " is not a directory." << std::endl;
     return false;
   }
 
   const bool ret_val = fs::create_directories(path); // Should return true
   if (ret_val)
-    std::clog << "Directory " << path << " has been created." << std::endl;
+    clog << "Directory " << path << " has been created." << std::endl;
   return ret_val;
 }
 
 static void run_recorder(const std::string &point_type,
+                         const std::size_t frames_to_take,
                          const fs::path &output_dir) {
   assert(fs::is_directory(output_dir));
 
   const auto prev_cd = fs::current_path();
   fs::current_path(output_dir);
 
-  std::clog << "Creating recorder . . . " << std::endl;
-  const auto recorder = jarvis::make_pcd_recorder(point_type);
+  clog << "Creating recorder . . . " << std::endl;
+  auto recorder = jarvis::make_pcd_recorder(point_type, frames_to_take);
 
-  std::clog << "Starting recorder" << std::endl;
+  clog << "Starting recorder" << std::endl;
   recorder->start();
+  clog << "The recorder is running!\n";
 
-  // static std::atomic<bool> signaled{false};
-  //  std::signal(SIGINT, [](int) { signaled = true; });
-  //  while (!signaled)
-  //    std::this_thread::sleep_for(500ms);
-  //
-  //  std::clog << "Termination signal received! Wait for resource cleaning :)"
-  //            << std::endl;
-  //
-  //  std::signal(SIGINT, [](int) {
-  //    std::clog << "Wait while the program frees acquired resources!"
-  //              << std::endl;
-  //  });
+  static std::atomic<bool> signaled{false};
+  std::signal(SIGINT, [](int) { signaled = true; });
 
-  std::clog << "The recorder is running!\n";
-  std::clog << "Press ENTER to stop it." << std::endl;
-  read_line();
+  using namespace std::chrono_literals;
+  while (!recorder->wait_for(500ms)) {
+    if (!signaled)
+      continue;
+    clog << "\nStopping recorder . . . " << std::endl;
+    recorder->stop();
+    break;
+  }
 
-  std::clog << "Stopping recorder . . . " << std::endl;
-  recorder->stop();
-  std::clog << "All done!" << std::endl;
+  recorder.reset(); // Destroy recorder before logging.
   fs::current_path(prev_cd);
+  clog << "All done!" << std::endl;
 }
 
 static int run_main_program(int argc, char *argv[]) {
@@ -162,54 +159,59 @@ static int run_main_program(int argc, char *argv[]) {
   options_driver opts(argv[0]); // Initialized with program name
   po::variables_map vm;
   opts.parse_options(argc, argv, vm);
+  po::notify(vm);
 
   if (vm.count("help")) {
-    opts.print_usage(std::clog);
-    return 0;
+    opts.print_usage(clog);
+    return EXIT_SUCCESS;
   }
 
   if (vm.count("list-devices")) {
     jarvis::list_openni_devices();
-    return 0;
+    return EXIT_SUCCESS;
   }
 
   if (vm.count("list-point-types")) {
     list_point_types();
-    return 0;
+    return EXIT_SUCCESS;
   }
 
   if (vm.count("get-info")) {
     const auto &device_id = vm["get-info"].as<std::string>();
     jarvis::show_openni_device_info(device_id);
-    return 0;
+    return EXIT_SUCCESS;
   }
 
   if (!vm.count("output-directory")) {
-    std::clog << "Error: No output directory was specified!\n\n";
-    opts.print_usage(std::clog);
-    return -1;
+    clog << "Error: Output directory is missing.\n";
+    opts.print_usage(clog);
+    return EXIT_FAILURE;
   }
 
   const fs::path output_dir = vm["output-directory"].as<std::string>();
   const auto &point_type_var = vm["point-type"];
   const auto &point_type_str = point_type_var.as<std::string>();
   if (point_type_var.defaulted()) {
-    std::clog << "No selected point type: ";
-    std::clog << "defaulted to '" << point_type_str << "'\n";
+    clog << "No selected point type: ";
+    clog << "defaulted to '" << point_type_str << "'\n";
   }
   if (!create_dirs(output_dir))
-    return -2; // Couldn't create directory
-  run_recorder(point_type_str, output_dir);
-  return 0;
+    return EXIT_FAILURE; // Couldn't create directory
+  const std::size_t frames_to_take = vm["take"].as<std::size_t>();
+  run_recorder(point_type_str, frames_to_take, output_dir);
+  return EXIT_SUCCESS;
 }
 
 int main(int argc, char *argv[]) {
   try {
-    return run_main_program(argc, argv);
+    const int ret_val = run_main_program(argc, argv);
+    if (ret_val == EXIT_SUCCESS)
+      return 0; // EXIT_SUCESS is not required to be zero.
+    return ret_val;
   } catch (std::exception &ex) {
-    std::clog << "Error: " << ex.what() << '\n';
+    clog << "Error: " << ex.what() << '\n';
   } catch (...) {
-    std::clog << "Unexpected error!\n";
+    clog << "Unexpected error!\n";
   }
-  return -1;
+  return EXIT_FAILURE;
 }

@@ -5,9 +5,11 @@
 
 #include "recorder.hpp"
 
-#include <atomic> // For std::atomic
-#include <future> // For std::async, std::future
-#include <cstdio> // For std::sprintf
+#include <atomic>   // for std::atomic
+#include <iostream> // for std::clog
+#include <future>   // for std::async, std::future
+#include <cassert>  // for assert
+#include <cstdio>   // for std::sprintf
 
 #include <pcl/console/print.h>
 #include <pcl/io/openni_grabber.h>
@@ -15,8 +17,6 @@
 
 #include <tbb/concurrent_queue.h>
 #include <tbb/pipeline.h>
-
-#include <iostream> // TEMPORAL
 
 using pcl::console::print_info;
 using pcl::console::print_warn;
@@ -128,12 +128,20 @@ public:
   using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
 
 public:
-  pcd_recorder() {}
+  pcd_recorder(const std::size_t frames_to_take) {
+    pending_frames = frames_to_take;
+    take_infinite_frames = (frames_to_take == 0);
+  }
+
   ~pcd_recorder() { stop(); }
 
   void start() override {
     pipeline_execution =
         std::async(std::launch::async, &pcd_recorder::run_pipeline, this);
+  }
+
+  bool wait_for(const std::chrono::milliseconds &time_ms) override {
+    return pipeline_execution.wait_for(time_ms) == std::future_status::ready;
   }
 
   void stop() override {
@@ -149,11 +157,20 @@ private:
     using tbb::make_filter;
 
     auto consumer = [this](tbb::flow_control &fc) -> cloud_ptr {
+      if (!take_infinite_frames && pending_frames == 0) {
+        fc.stop();
+        return nullptr;
+      }
       cloud_ptr cloud;
-      if (cloud_grabber.grab(cloud))
-        return cloud;
-      fc.stop();
-      return nullptr;
+      if (!cloud_grabber.grab(cloud)) {
+        fc.stop();
+        return nullptr;
+      }
+      if (!take_infinite_frames) {
+        assert(pending_frames > 0);
+        --pending_frames;
+      }
+      return cloud;
     };
 
     size_t written_files = 0;
@@ -177,6 +194,8 @@ private:
   openni_grabber<point_t> cloud_grabber;
   pcl::PCDWriter cloud_writer;
   std::future<void> pipeline_execution;
+  std::size_t pending_frames = 0;
+  bool take_infinite_frames = true;
 };
 } // end anonymous namespace
 
@@ -186,13 +205,31 @@ private:
 
 recorder::~recorder() {}
 
+class pcd_recorder_builder {
+public:
+  pcd_recorder_builder(const std::size_t frames_to_take_)
+      : frames_to_take{frames_to_take_} {}
+
+  template <typename PointT>
+  std::unique_ptr<recorder> build_recorder() {
+    return std::make_unique<pcd_recorder<PointT>>(frames_to_take);
+  }
+
+  std::unique_ptr<recorder> build_recorder(const std::string &point_type) {
+    if (point_type == "xyz")
+      return build_recorder<pcl::PointXYZ>();
+    if (point_type == "xyzrgba")
+      return build_recorder<pcl::PointXYZRGBA>();
+    throw std::domain_error("Unknown point type: " + point_type);
+  }
+
+private:
+  std::size_t frames_to_take;
+};
+
 std::unique_ptr<recorder>
-jarvis::make_pcd_recorder(const std::string &point_type) {
-  using pcl::PointXYZ;
-  using pcl::PointXYZRGBA;
-  if (point_type == "xyz")
-    return std::make_unique<pcd_recorder<PointXYZ>>();
-  if (point_type == "xyzrgba")
-    return std::make_unique<pcd_recorder<PointXYZRGBA>>();
-  throw std::domain_error("Unknown point type: " + point_type);
+jarvis::make_pcd_recorder(const std::string &point_type,
+                          const std::size_t frames_to_take) {
+  pcd_recorder_builder builder(frames_to_take);
+  return builder.build_recorder(point_type);
 }
