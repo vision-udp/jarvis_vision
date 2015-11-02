@@ -5,12 +5,16 @@
 
 #include "recorder.hpp"
 
-#include <atomic>   // for std::atomic
-#include <future>   // for std::async, std::future, std::promise
-#include <iostream> // for std::clog
-#include <memory>   // for std::unique_ptr
-#include <cassert>  // for assert
-#include <cstdio>   // for std::sprintf
+#include <atomic>             // for std::atomic
+#include <chrono>             // for std::chrono_literals
+#include <condition_variable> // for std::condition_variable
+#include <future>             // for std::async, std::future, std::promise
+#include <iostream>           // for std::clog
+#include <memory>             // for std::unique_ptr
+#include <mutex>              // for std::mutex
+#include <thread>             // for std::this_thread::sleep_for
+#include <cassert>            // for assert
+#include <cstdio>             // for std::sprintf
 
 #include <pcl/console/print.h>
 #include <pcl/io/openni_grabber.h>
@@ -81,36 +85,40 @@ public:
 public:
   openni_grabber(const bool enable_dr) {
     grabber = std::make_unique<pcl::OpenNIGrabber>();
-    config_callback();
     config_depth_registration(enable_dr);
+    config_callback();
     grabber->start();
   }
 
   ~openni_grabber() {
     assert(grabber->isRunning());
     grabber->stop();
+    // The sleep is a work around, since sometimes callbacks are called after
+    // stopping or destroying the grabber.
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(300ms);
   }
 
   void grab(cloud_ptr &cloud) {
-    assert(!next_promise.load(std::memory_order_relaxed));
+    assert(!output_cloud);
     assert(grabber->isRunning());
-
-    promise_t promise;
-    next_promise.store(&promise);
-    cloud = promise.get_future().get();
-
-    assert(!next_promise.load(std::memory_order_relaxed));
+    std::unique_lock<std::mutex> lk(mtx);
+    output_cloud = &cloud;
+    cv.wait(lk, [&] { return output_cloud == nullptr; });
+    assert(!output_cloud);
   }
 
 private:
   void config_callback() {
     boost::function<void(const cloud_ptr &)> callback;
     callback = [&](const cloud_ptr &cloud) {
-      if (!next_promise.load())
+      std::unique_lock<std::mutex> lk(mtx);
+      if (!output_cloud)
         return;
-      auto &promise = *next_promise.load(std::memory_order_relaxed);
-      next_promise.store(nullptr);
-      promise.set_value(cloud);
+      *output_cloud = cloud;
+      output_cloud = nullptr;
+      lk.unlock();
+      cv.notify_one();
     };
     grabber->registerCallback(callback);
   }
@@ -129,8 +137,10 @@ private:
   }
 
 private:
+  std::mutex mtx;
+  std::condition_variable cv;
+  cloud_ptr *output_cloud{nullptr};
   std::unique_ptr<pcl::OpenNIGrabber> grabber;
-  std::atomic<promise_t *> next_promise{nullptr};
 };
 } // end anonymous namespace
 
@@ -224,7 +234,7 @@ private:
 
 private:
   std::future<void> pipeline_execution;
-  std::atomic<bool> pipeline_stopped;
+  std::atomic<bool> pipeline_stopped{false};
   pcd_recorder::param_type params;
   openni_grabber<point_t> grabber;
 };
