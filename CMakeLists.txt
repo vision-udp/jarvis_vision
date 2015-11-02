@@ -15,7 +15,7 @@ find_package(Threads) # Needed for gtest
 find_package(Doxygen)
 find_package(PCL 1.7.2 REQUIRED COMPONENTS
   common io visualization features filters sample_consensus
-  search segmentation)
+  search segmentation surface)
 find_package(Boost 1.58 REQUIRED COMPONENTS 
   filesystem program_options system)
 find_package(TBB)
