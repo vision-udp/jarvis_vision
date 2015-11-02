@@ -25,6 +25,10 @@ public:
     using pcl::console::print_error;
     using namespace std::chrono_literals;
 
+    viewer.setBackgroundColor(0, 0, 0);
+    viewer.initCameraParameters();
+    viewer.setCameraPosition(0.0, -0.3, -0.2, 0.0, -0.3, 1.0, 0.0, -1.0, 0.0);
+
     try {
       pcl::io::loadPCDFile<PointT>(filename, *cloud);
     } catch (pcl::PCLException e) {
