@@ -20,6 +20,7 @@
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 using std::clog;
+using jarvis::pcd_recorder;
 
 namespace {
 class options_driver {
@@ -36,7 +37,8 @@ public:
         ("point-type,t", po::value<std::string>()->default_value("xyz"),
          "Point type to use") // op5
         ("take,n", po::value<std::size_t>()->default_value(0),
-         "Number of frames to take (0 = infinity)."); // op6
+         "Number of frames to take (0 = infinity).")           // op6
+        ("depth-registration,r", "Enable depth registration"); // op7
 
     hidden_options.add_options()("output-directory", po::value<std::string>());
     options.add(visible_options).add(hidden_options);
@@ -105,7 +107,7 @@ static bool create_dirs(const fs::path &path) {
       clog << "Invalid answer. Respond 'y' or 'n'.\n";
     }
   }
-  // If path does not exists...
+  // If path does not exist...
   fs::path root = fs::absolute(path.parent_path());
   while (!fs::exists(root)) {
     root = root.parent_path();
@@ -122,8 +124,7 @@ static bool create_dirs(const fs::path &path) {
   return ret_val;
 }
 
-static void run_recorder(const std::string &point_type,
-                         const std::size_t frames_to_take,
+static void run_recorder(const pcd_recorder::param_type &params,
                          const fs::path &output_dir) {
   assert(fs::is_directory(output_dir));
 
@@ -131,7 +132,7 @@ static void run_recorder(const std::string &point_type,
   fs::current_path(output_dir);
 
   clog << "Creating recorder . . . " << std::endl;
-  auto recorder = jarvis::make_pcd_recorder(point_type, frames_to_take);
+  auto recorder = pcd_recorder::make(params);
 
   clog << "Starting recorder" << std::endl;
   recorder->start();
@@ -146,6 +147,7 @@ static void run_recorder(const std::string &point_type,
       continue;
     clog << "\nStopping recorder . . . " << std::endl;
     recorder->stop();
+    recorder->wait();
     break;
   }
 
@@ -189,16 +191,14 @@ static int run_main_program(int argc, char *argv[]) {
   }
 
   const fs::path output_dir = vm["output-directory"].as<std::string>();
-  const auto &point_type_var = vm["point-type"];
-  const auto &point_type_str = point_type_var.as<std::string>();
-  if (point_type_var.defaulted()) {
-    clog << "No selected point type: ";
-    clog << "defaulted to '" << point_type_str << "'\n";
-  }
   if (!create_dirs(output_dir))
     return EXIT_FAILURE; // Couldn't create directory
-  const std::size_t frames_to_take = vm["take"].as<std::size_t>();
-  run_recorder(point_type_str, frames_to_take, output_dir);
+
+  pcd_recorder::param_type params;
+  params.point_type = vm["point-type"].as<std::string>();
+  params.frames_to_take = vm["take"].as<std::size_t>();
+  params.depth_registration = vm.count("depth-registration");
+  run_recorder(params, output_dir);
   return EXIT_SUCCESS;
 }
 
