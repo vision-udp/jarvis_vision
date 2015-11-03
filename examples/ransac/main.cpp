@@ -2,6 +2,7 @@
 #include <boost/program_options.hpp>
 
 #include <pcl/point_types.h>
+#include <pcl/common/angles.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/surface/mls.h>
@@ -9,6 +10,10 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/segmentation/region_growing.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/ModelCoefficients.h>
 
 #include <iostream>
 #include <regex>
@@ -84,73 +89,110 @@ struct recognition_result {
   }
 };
 
+template <typename PointT>
+static std::vector<typename pcl::PointCloud<PointT>::Ptr>
+region_growing(const typename pcl::PointCloud<PointT>::Ptr &cloud) {
+  pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
+  // kd-tree object for searches.
+  typename pcl::search::KdTree<PointT>::Ptr kdtree(
+      new pcl::search::KdTree<PointT>);
+  kdtree->setInputCloud(cloud);
+
+  // Estimate the normals.
+  pcl::NormalEstimation<PointT, pcl::Normal> normalEstimation;
+  normalEstimation.setInputCloud(cloud);
+  // normalEstimation.setRadiusSearch(0.05);
+  normalEstimation.setKSearch(100);
+  normalEstimation.setSearchMethod(kdtree);
+  normalEstimation.compute(*normals);
+
+  // Region growing clustering object.
+  pcl::RegionGrowing<PointT, pcl::Normal> clustering;
+  clustering.setMinClusterSize(1000);
+  clustering.setMaxClusterSize(100000);
+  clustering.setSearchMethod(kdtree);
+  clustering.setNumberOfNeighbours(500);
+  clustering.setInputCloud(cloud);
+  clustering.setInputNormals(normals);
+  clustering.setSmoothnessThreshold(pcl::deg2rad(3.0f));
+  clustering.setCurvatureThreshold(1.0f);
+
+  std::vector<pcl::PointIndices> clusters;
+  clustering.extract(clusters);
+
+  std::vector<typename pcl::PointCloud<PointT>::Ptr> res;
+  // For every cluster...
+  for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin();
+       i != clusters.end(); ++i) {
+    typename pcl::PointCloud<PointT>::Ptr cluster(new pcl::PointCloud<PointT>);
+    for (const auto &point : i->indices)
+      cluster->points.push_back(cloud->points[static_cast<size_t>(point)]);
+    cluster->width = static_cast<uint32_t>(cluster->points.size());
+    cluster->height = 1;
+    cluster->is_dense = true;
+    if (cluster->points.size() <= 0)
+      break;
+    res.push_back(cluster);
+  }
+
+  return res;
+}
+
+template <typename PointT>
+static recognition_result
+ransac_fitting(const typename pcl::PointCloud<PointT>::Ptr &cloud) {
+  recognition_result result;
+  pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+  // Create the segmentation object
+  pcl::SACSegmentation<PointT> seg;
+  // Optional
+  seg.setOptimizeCoefficients(true);
+  // Mandatory
+  seg.setModelType(pcl::SACMODEL_PLANE);
+  seg.setMethodType(pcl::SAC_RANSAC);
+  seg.setDistanceThreshold(0.01);
+  seg.setInputCloud(cloud);
+  seg.segment(*inliers, *coefficients);
+
+  if (inliers->indices.empty())
+    return result;
+
+  bool valid_fitting =
+      static_cast<double>(inliers->indices.size()) / cloud->points.size() > 0.7;
+
+  if (!valid_fitting)
+    return result;
+
+  if (pcl::SACMODEL_PLANE) {
+    ++result.boxes;
+  }
+
+  return result;
+}
+
 static recognition_result proccess_image(const fs::path &path) {
-  //    2.1 - read image
-  //    2.2 - filter image
-  //    2.3 - segmentation
-  //    2.5 - matching
   using point_t = pcl::PointXYZRGBA;
   recognition_result result;
 
   pcl::PointCloud<point_t>::Ptr cloud(new pcl::PointCloud<point_t>());
-  pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
+
   // read file and remove nan values
   pcl::io::loadPCDFile(path.c_str(), *cloud);
   std::vector<int> indices;
   pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
 
-  // kd-tree object for searches.
-  pcl::search::KdTree<point_t>::Ptr kdtree(new pcl::search::KdTree<point_t>);
-  kdtree->setInputCloud(cloud);
-
-  // Estimate the normals.
-  pcl::NormalEstimation<point_t, pcl::Normal> normalEstimation;
-  normalEstimation.setInputCloud(cloud);
-  normalEstimation.setRadiusSearch(0.05);
-  normalEstimation.setSearchMethod(kdtree);
-  normalEstimation.compute(*normals);
-
-  // Region growing clustering object.
-  pcl::RegionGrowing<point_t, pcl::Normal> clustering;
-  clustering.setMinClusterSize(900);
-  clustering.setMaxClusterSize(10000000);
-  clustering.setSearchMethod(kdtree);
-  clustering.setNumberOfNeighbours(30);
-  clustering.setInputCloud(cloud);
-  clustering.setInputNormals(normals);
-  // Set the angle in radians that will be the smoothness threshold
-  // (the maximum allowable deviation of the normals).
-  clustering.setSmoothnessThreshold(90.0 / 180.0 * M_PI); // 7 degrees.
-  // Set the curvature threshold. The disparity between curvatures will be
-  // tested after the normal deviation check has passed.
-  clustering.setCurvatureThreshold(0.5);
-
-  std::vector<pcl::PointIndices> clusters;
-  clustering.extract(clusters);
-
-  // For every cluster...
+  auto clusters = region_growing<point_t>(cloud);
   int currentClusterNum = 1;
-  for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin();
-       i != clusters.end(); ++i) {
-    // ...add all its points to a new cloud...
-    pcl::PointCloud<point_t>::Ptr cluster(new pcl::PointCloud<point_t>);
-    for (std::vector<int>::const_iterator point = i->indices.begin();
-         point != i->indices.end(); point++)
-      cluster->points.push_back(cloud->points[*point]);
-    cluster->width = cluster->points.size();
-    cluster->height = 1;
-    cluster->is_dense = true;
-
-    // ...and save it to disk.
-    if (cluster->points.size() <= 0)
-      break;
+  for (const auto &cluster : clusters) {
+    // write to disk partial result
     std::cout << "Cluster " << currentClusterNum << " has "
               << cluster->points.size() << " points." << std::endl;
     std::string fileName =
         "cluster" + boost::to_string(currentClusterNum) + ".pcd";
     pcl::io::savePCDFileASCII(fileName, *cluster);
-
     currentClusterNum++;
+    result += ransac_fitting<point_t>(cluster);
   }
 
   return result;
