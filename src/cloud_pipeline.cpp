@@ -6,26 +6,25 @@
 #include <jarvis/cloud_pipeline.hpp>
 
 #include <jarvis/colorize.hpp>
+#include <jarvis/plane_extraction.hpp>
+#include <jarvis/steady_timer.hpp>
 
-#include <algorithm> // for set_difference
-#include <chrono>    // for steady_clock
-#include <iostream>  // for clog
-#include <iterator>  // for back_inserter
-#include <numeric>   // for std::iota
-#include <cassert>   // for assert
-#include <cstdint>   // for uint8_t
+#include <iostream> // for clog
+#include <cassert>  // for assert
+#include <cstdint>  // for uint8_t
 
-#include <boost/make_shared.hpp>             // for make_shared
-#include <pcl/point_types.h>                 // for PointXYZ, Normal
-#include <pcl/common/angles.h>               // for pcl::deg2rad
-#include <pcl/features/normal_3d.h>          // for NormalEstimation
-#include <pcl/search/kdtree.h>               // For KdTree
-#include <pcl/search/organized.h>            // for OrganizedNeighbor
-#include <pcl/segmentation/region_growing.h> // for RegionGrowing
+#include <boost/make_shared.hpp>    // for make_shared
+#include <pcl/filters/filter.h>     // for removeNaNFromPointCloud
+#include <pcl/point_types.h>        // for PointXYZ, Normal
+#include <pcl/common/angles.h>      // for pcl::deg2rad
+#include <pcl/features/normal_3d.h> // for NormalEstimation
+#include <pcl/search/kdtree.h>      // For KdTree
+#include <pcl/search/organized.h>   // for OrganizedNeighbor
+//#include <pcl/segmentation/region_growing.h> // for RegionGrowing
+#include <pcl/segmentation/extract_clusters.h>
 
 #include <pcl/sample_consensus/sac_model_cylinder.h> // TEMPORAL
 #include <pcl/sample_consensus/ransac.h>             // TEMPORAL
-#include <pcl/segmentation/sac_segmentation.h>       // TEMPORAL
 
 // ==========================================
 // Using directives
@@ -53,94 +52,21 @@ template <typename PointT>
 using cloud_const_ptr = boost::shared_ptr<const PointCloud<PointT>>;
 
 // ==========================================
-// Steady timer
-// ==========================================
-
-namespace {
-class steady_timer {
-  using clock = std::chrono::steady_clock;
-
-public:
-  void run(const char *task_name) {
-    clog << "[ RUN      ] " << task_name << endl;
-    start = clock::now();
-  }
-
-  void finish() {
-    std::chrono::duration<double> seconds = clock::now() - start;
-    clog << "[       OK ] " << seconds.count() << 's' << endl;
-  }
-
-private:
-  clock::time_point start;
-};
-} // end anonymous namespace
-
-// ==========================================
-// Coloring utilities
-// ==========================================
-namespace {} // end anonymous namespace
-
-// ==========================================
-// Plane extraction
-// ==========================================
-
-template <typename PointT>
-std::vector<PointIndices> extract_planes(const cloud_const_ptr<PointT> &cloud,
-                                         shared_ptr<PointIndices> &outliers) {
-  pcl::SACSegmentation<PointT> seg;
-  seg.setOptimizeCoefficients(true);
-  seg.setModelType(pcl::SACMODEL_PLANE);
-  seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setDistanceThreshold(0.03);
-  seg.setProbability(0.5);
-  seg.setMaxIterations(100);
-  seg.setInputCloud(cloud);
-
-  // remaining indices
-  const auto rem = boost::make_shared<PointIndices>();
-  rem->indices.resize(cloud->size());
-  std::iota(rem->indices.begin(), rem->indices.end(), 0);
-
-  ModelCoefficients coeffs;
-  PointIndices inliers;
-  std::vector<int> indices_tmp;
-  std::vector<PointIndices> result;
-
-  while (rem->indices.size() >= 10000) {
-    seg.setIndices(rem);
-    seg.segment(inliers, coeffs);
-    if (inliers.indices.size() <= 10000)
-      break;
-
-    clog << "Found plane with " << inliers.indices.size() << " points" << endl;
-    result.push_back(inliers);
-
-    assert(std::is_sorted(inliers.indices.begin(), inliers.indices.end()));
-    indices_tmp.clear();
-    std::set_difference(rem->indices.begin(), rem->indices.end(),
-                        inliers.indices.begin(), inliers.indices.end(),
-                        std::back_inserter(indices_tmp));
-    std::swap(rem->indices, indices_tmp);
-  }
-  outliers = std::move(rem);
-  return result;
-}
-
-// ==========================================
 // Shape Matching
 // ==========================================
 
 template <typename PointT, typename PointNT>
-static double cylinder_prob(const shared_ptr<const PointCloud<PointT>> &cloud,
+static double cylinder_prob(const shared_ptr<PointCloud<PointT>> &cloud,
                             const shared_ptr<PointCloud<PointNT>> &normals,
-                            const std::vector<int> &indices) {
+                            const std::vector<int> &indices,
+                            ModelCoefficients &coeffs) {
 
   using model_t = pcl::SampleConsensusModelCylinder<PointT, PointNT>;
   using ransac_t = pcl::RandomSampleConsensus<PointT>;
 
   auto model = boost::make_shared<model_t>(cloud, indices);
   model->setInputNormals(normals);
+  model->setRadiusLimits(0.001, 0.1);
 
   ransac_t ransac(model);
   ransac.setMaxIterations(1000);
@@ -149,6 +75,15 @@ static double cylinder_prob(const shared_ptr<const PointCloud<PointT>> &cloud,
 
   std::vector<int> inliers;
   ransac.getInliers(inliers);
+  Eigen::VectorXf model_coeffs;
+  ransac.getModelCoefficients(model_coeffs);
+
+  coeffs.values.resize(static_cast<size_t>(model_coeffs.size()));
+  for (size_t i = 0; i < coeffs.values.size(); ++i) {
+    auto idx = static_cast<Eigen::VectorXf::Index>(i);
+    coeffs.values[i] = model_coeffs[idx];
+  }
+
   return static_cast<double>(inliers.size()) / indices.size();
 }
 
@@ -162,48 +97,64 @@ cloud_pipeline::cloud_pipeline() {}
 
 cloud_pipeline::~cloud_pipeline() {}
 
-void cloud_pipeline::process(const cloud_ptr &input_cloud) {
-  cloud = input_cloud;
-  colored_cloud = make_colored_cloud(*cloud, rgba_color(255, 0, 0));
-  color_generator color_gen;
+void cloud_pipeline::process(const cloud_const_ptr &input_cloud) {
   steady_timer timer;
 
+  clog << "Total points: " << input_cloud->size() << std::endl;
+  {
+    cloud = make_shared<cloud_t>();
+    std::vector<int> indices;
+    timer.run("Removing NaNs");
+    pcl::removeNaNFromPointCloud(*input_cloud, *cloud, indices);
+    timer.finish();
+  }
+  clog << "Total NonNans points: " << cloud->size() << endl;
+
+  colored_cloud = make_colored_cloud(*cloud, rgba_color(255, 0, 0));
+  color_generator color_gen;
+
   timer.run("Extracting planes");
-  auto planes = extract_planes(cloud, nonplane_indices);
+  plane_extractor<PointXYZ> plane_extractor;
+  plane_extractor.set_input_cloud(cloud);
+  plane_extractor.extract_planes();
+  nonplane_indices = plane_extractor.get_remaining_indices();
+  const size_t num_planes = plane_extractor.get_num_planes();
   timer.finish();
-  for (const auto &indices : planes) {
-    colorize(*colored_cloud, indices, color_gen.blue());
+  std::clog << "Number of found planes: " << num_planes << '\n';
+
+  for (size_t i = 0; i < num_planes; ++i) {
+    const auto &inliers = plane_extractor.get_inliers(i);
+    colorize(*colored_cloud, inliers, color_gen.blue());
   }
 
   std::clog << "Remaining points: " << nonplane_indices->indices.size() << '\n';
   set_search_method();
 
-  timer.run("Compute normals");
-  estimate_normals();
-  timer.finish();
-
-  timer.run("Region growing");
+  timer.run("Extracting clusters");
   segment();
   timer.finish();
 
+  timer.run("Computing per cluster normals");
+  estimate_normals();
+  timer.finish();
+
+  timer.run("Processing clusters");
   clog << "Number of clusters is equal to " << clusters.size() << '\n';
-  clog << "Processing clusters:\n";
   for (size_t i = 0; i < clusters.size(); ++i) {
     const auto &indices = clusters[i].indices;
-    clog << "Cluster " << i + 1 << ":\n";
-    clog << " Size = " << ' ' << indices.size() << '\n';
-
-    timer.run("Computing cylinder prob");
-    const auto cyl_prob = cylinder_prob(cloud, normals, indices);
-    timer.finish();
+    ModelCoefficients coeffs;
+    const auto cyl_prob = cylinder_prob(cloud, normals, indices, coeffs);
+    assert(coeffs.values.size() == 7);
+    clog << " Size = " << indices.size() << ", ";
+    clog << " estimated radius = " << coeffs.values[6] << ", ";
     clog << " Cylinder prob = " << 100.0 * cyl_prob << "%\n";
-    clog << endl;
-
-    if (cyl_prob >= 0.85)
-      colorize(*colored_cloud, clusters[i], color_gen.green());
-    else
+    if (cyl_prob >= 0.85) {
+      uint8_t green_intensity = static_cast<uint8_t>(255 * cyl_prob);
+      colorize(*colored_cloud, clusters[i], rgba_color(0, green_intensity, 0));
+    } else
       colorize(*colored_cloud, clusters[i], rgba_color(128, 128, 0));
   }
+  timer.finish();
   clog << std::endl;
 }
 
@@ -218,29 +169,51 @@ void cloud_pipeline::set_search_method() {
 }
 
 void cloud_pipeline::estimate_normals() {
-  normals = make_shared<normals_t>();
   pcl::NormalEstimation<PointXYZ, Normal> ne;
   ne.setSearchMethod(search);
   ne.setInputCloud(cloud);
-  // ne.setIndices(nonplane_indices);
   ne.setKSearch(50);
-  ne.compute(*normals);
+
+  normals = boost::make_shared<normals_t>();
+  normals->points.resize(cloud->size());
+
+  auto normals_tmp = make_shared<normals_t>();
+  auto indices_tmp = make_shared<PointIndices>();
+
+  for (const auto &cluster : clusters) {
+    indices_tmp->indices = cluster.indices;
+    ne.setIndices(indices_tmp);
+    ne.compute(*normals_tmp);
+
+    for (size_t i = 0; i < cluster.indices.size(); ++i) {
+      const auto mapped_i = static_cast<size_t>(cluster.indices[i]);
+      normals->points[mapped_i] = normals_tmp->points[i];
+    }
+  }
 }
 
 void cloud_pipeline::segment() {
-  pcl::RegionGrowing<PointXYZ, Normal> reg;
-
-  reg.setMinClusterSize(1000);
-  reg.setMaxClusterSize(10000);
-  reg.setSearchMethod(search);
-  reg.setNumberOfNeighbours(500);
-  reg.setInputCloud(cloud);
-  reg.setIndices(nonplane_indices);
-  reg.setInputNormals(normals);
-  reg.setSmoothnessThreshold(pcl::deg2rad(3.0f));
-  reg.setCurvatureThreshold(1.0f);
-
-  reg.extract(clusters);
+  //  pcl::RegionGrowing<PointXYZ, Normal> reg;
+  //
+  //  reg.setMinClusterSize(500);
+  //  reg.setMaxClusterSize(10000);
+  //  reg.setSearchMethod(search);
+  //  reg.setNumberOfNeighbours(500);
+  //  reg.setInputCloud(cloud);
+  //  reg.setIndices(nonplane_indices);
+  //  reg.setInputNormals(normals);
+  //  reg.setSmoothnessThreshold(pcl::deg2rad(3.0f));
+  //  reg.setCurvatureThreshold(1.0f);
+  //
+  //  reg.extract(clusters);
+  pcl::EuclideanClusterExtraction<PointXYZ> ec;
+  ec.setClusterTolerance(0.02);
+  ec.setMinClusterSize(1000);
+  ec.setMaxClusterSize(15000);
+  ec.setSearchMethod(search);
+  ec.setInputCloud(cloud);
+  ec.setIndices(nonplane_indices);
+  ec.extract(clusters);
 }
 
 } // end namespace jarvis

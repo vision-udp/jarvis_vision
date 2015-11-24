@@ -2,7 +2,9 @@ add_library(jarvis_vision
   "jarvis.cpp"
   "cloud_pipeline.cpp"
   "colorize.cpp"
+  "plane_extraction.cpp"
   "simple_visualizer.cpp"
+  "steady_timer.cpp"
   )
 
 target_include_directories(jarvis_vision PUBLIC "${CMAKE_SOURCE_DIR}/include")

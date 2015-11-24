@@ -29,7 +29,8 @@ namespace jarvis {
 class cloud_pipeline {
 public:
   using cloud_t = pcl::PointCloud<pcl::PointXYZ>;
-  using cloud_ptr = boost::shared_ptr<const cloud_t>;
+  using cloud_ptr = boost::shared_ptr<cloud_t>;
+  using cloud_const_ptr = boost::shared_ptr<const cloud_t>;
 
 private:
   using normals_t = pcl::PointCloud<pcl::Normal>;
@@ -39,7 +40,7 @@ public:
   cloud_pipeline();
   ~cloud_pipeline();
 
-  void process(const cloud_ptr &input_cloud);
+  void process(const cloud_const_ptr &input_cloud);
 
   auto get_colored_cloud() const { return colored_cloud; }
 

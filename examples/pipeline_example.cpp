@@ -3,6 +3,7 @@
 #include <pcl/io/pcd_io.h>       // for loadPCDFile
 #include <pcl/point_types.h>
 #include <jarvis/cloud_pipeline.hpp>
+#include <jarvis/steady_timer.hpp>
 #include <jarvis/simple_visualizer.hpp>
 
 using namespace jarvis;
@@ -43,9 +44,15 @@ int main(int argc, char *argv[]) {
 
   try {
     const auto cloud = read_cloud<pcl::PointXYZ>(argv[1]);
+    steady_timer timer;
     cloud_pipeline pipeline;
+    timer.run("Processing frame");
     pipeline.process(cloud);
-    clog << "Computations done!\n";
+    const auto elapsed = timer.finish();
+    clog << "Frame computations done!\n";
+    const std::chrono::duration<double> elapsed_secs(elapsed);
+    const double estimated_fps = 1.0 / elapsed_secs.count();
+    clog << "Estimated frame rate: " << estimated_fps << " fps\n";
     clog << "Press enter to visualize . . ." << std::endl;
     std::cin.get();
     const auto colored_cloud = pipeline.get_colored_cloud();
