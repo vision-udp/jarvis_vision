@@ -50,6 +50,7 @@ private:
 
 private:
   cloud_ptr cloud;
+  boost::shared_ptr<pcl::PointIndices> nonplane_indices;
   boost::shared_ptr<search_t> search;
   boost::shared_ptr<normals_t> normals;
   std::vector<pcl::PointIndices> clusters;

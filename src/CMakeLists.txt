@@ -1,6 +1,7 @@
 add_library(jarvis_vision 
   "jarvis.cpp"
   "cloud_pipeline.cpp"
+  "colorize.cpp"
   "simple_visualizer.cpp"
   )
 
