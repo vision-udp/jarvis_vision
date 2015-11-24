@@ -45,6 +45,9 @@ int main(int argc, char *argv[]) {
     const auto cloud = read_cloud<pcl::PointXYZ>(argv[1]);
     cloud_pipeline pipeline;
     pipeline.process(cloud);
+    clog << "Computations done!\n";
+    clog << "Press enter to visualize . . ." << std::endl;
+    std::cin.get();
     const auto colored_cloud = pipeline.get_colored_cloud();
     simple_visualizer<pcl::PointXYZRGBA> viewer;
     viewer.show_cloud(colored_cloud, "colored");

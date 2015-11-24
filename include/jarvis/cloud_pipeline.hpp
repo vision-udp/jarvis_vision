@@ -27,8 +27,11 @@ class Search;
 namespace jarvis {
 
 class cloud_pipeline {
+public:
   using cloud_t = pcl::PointCloud<pcl::PointXYZ>;
   using cloud_ptr = boost::shared_ptr<const cloud_t>;
+
+private:
   using normals_t = pcl::PointCloud<pcl::Normal>;
   using search_t = pcl::search::Search<pcl::PointXYZ>;
 
