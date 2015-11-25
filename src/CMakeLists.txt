@@ -1,7 +1,9 @@
 add_library(jarvis_vision 
   "jarvis.cpp"
+  "classification.cpp"
   "cloud_pipeline.cpp"
   "colorize.cpp"
+  "model_recognition.cpp"
   "plane_extraction.cpp"
   "simple_visualizer.cpp"
   "steady_timer.cpp"

@@ -13,9 +13,12 @@
 namespace jarvis {
 
 template <typename PointT>
-simple_visualizer<PointT>::simple_visualizer() {
+simple_visualizer<PointT>::simple_visualizer() {}
+
+template <typename PointT>
+void simple_visualizer<PointT>::start() {
   viewer = std::make_unique<viewer_t>("3D Viewer", false);
-  viewer->setFullScreen(true);
+  viewer->setFullScreen(full_screen);
   viewer->setWindowBorders(true);
   viewer->setBackgroundColor(0, 0, 0);
   viewer->initCameraParameters();
@@ -24,27 +27,31 @@ simple_visualizer<PointT>::simple_visualizer() {
 }
 
 template <typename PointT>
+void simple_visualizer<PointT>::stop() {
+  viewer->close();
+}
+
+template <typename PointT>
+bool simple_visualizer<PointT>::was_stopped() const {
+  return viewer->wasStopped();
+}
+
+template <typename PointT>
 simple_visualizer<PointT>::~simple_visualizer() {}
 
 template <typename PointT>
-void simple_visualizer<PointT>::loop() {
-  using namespace std::chrono_literals;
-  while (!viewer->wasStopped()) {
-    viewer->spinOnce();
-    std::this_thread::sleep_for(100ms);
-  }
+void simple_visualizer<PointT>::spin_once() {
+  viewer->spinOnce();
+}
+
+template <typename PointT>
+void simple_visualizer<PointT>::spin() {
+  viewer->spin();
 }
 
 template <typename PointT>
 void simple_visualizer<PointT>::show_cloud(const cloud_ptr &cloud,
                                            const std::string &id) {
-  // using handler_t =
-  //    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>;
-
-  // handler_t handler(cloud, r, g, b);
-  //    if (!viewer.updatePointCloud(cloud, handler, id))
-  //      viewer.addPointCloud(cloud, handler, id);
-
   if (!viewer->updatePointCloud(cloud, id))
     viewer->addPointCloud(cloud, id);
 }
