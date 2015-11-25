@@ -49,6 +49,14 @@ public:
     normals = input_normals;
   }
 
+  /// \brief Sets the minimum of points allowed to a plane.
+  ///
+  /// \param value The value to set.
+  ///
+  /// \note The default value is 10000.
+  ///
+  void set_min_points(std::size_t value) { min_points = value; }
+
   /// \brief Extract the planes from the input cloud.
   ///
   /// \returns The number of extracted planes.
@@ -92,6 +100,7 @@ public:
 private:
   cloud_const_ptr cloud;
   normals_const_ptr normals;
+  std::size_t min_points{10000};
   boost::shared_ptr<const pcl::PointIndices> indices;
   boost::shared_ptr<pcl::PointIndices> rem;
   std::vector<pcl::ModelCoefficients> coeffs_of;

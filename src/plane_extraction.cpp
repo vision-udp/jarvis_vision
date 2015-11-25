@@ -58,10 +58,10 @@ std::size_t plane_extractor<PointT>::extract_planes() {
   std::vector<int> indices_tmp;
   std::vector<PointIndices> result;
 
-  while (rem->indices.size() >= 10000) {
+  while (rem->indices.size() >= min_points) {
     seg.setIndices(rem);
     seg.segment(inliers, coeffs);
-    if (inliers.indices.size() <= 10000)
+    if (inliers.indices.size() <= min_points)
       break;
 
     inliers_of.push_back(inliers);

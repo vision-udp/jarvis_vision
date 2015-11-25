@@ -1,6 +1,7 @@
 add_library(jarvis_vision 
   "jarvis.cpp"
   "classification.cpp"
+  "cloud_io.cpp"
   "cloud_pipeline.cpp"
   "colorize.cpp"
   "model_recognition.cpp"

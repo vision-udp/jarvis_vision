@@ -90,6 +90,7 @@ private:
   void extract_planes() {
     timer.run("Extracting planes");
     plane_extractor.set_input_cloud(cloud);
+    plane_extractor.set_min_points(25000);
     plane_extractor.extract_planes();
     timer.finish();
     const size_t num_planes = plane_extractor.get_num_planes();
@@ -148,7 +149,7 @@ pipeline_manager<PointT>::get_colored_cloud() const {
     const auto &inliers = plane_extractor.get_inliers(i);
     const auto blue_scale =
         static_cast<double>(inliers.indices.size()) / cloud->size();
-    const uint8_t blue_val = static_cast<uint8_t>(255 * blue_scale);
+    const uint8_t blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
     colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
   }
 
