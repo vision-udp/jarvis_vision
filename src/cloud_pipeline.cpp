@@ -148,7 +148,7 @@ void cloud_pipeline::process(const cloud_const_ptr &input_cloud) {
     clog << " Size = " << indices.size() << ", ";
     clog << " estimated radius = " << coeffs.values[6] << ", ";
     clog << " Cylinder prob = " << 100.0 * cyl_prob << "%\n";
-    if (cyl_prob >= 0.85) {
+    if (cyl_prob >= 0.8) {
       uint8_t green_intensity = static_cast<uint8_t>(255 * cyl_prob);
       colorize(*colored_cloud, clusters[i], rgba_color(0, green_intensity, 0));
     } else
@@ -208,7 +208,7 @@ void cloud_pipeline::segment() {
   //  reg.extract(clusters);
   pcl::EuclideanClusterExtraction<PointXYZ> ec;
   ec.setClusterTolerance(0.02);
-  ec.setMinClusterSize(1000);
+  ec.setMinClusterSize(300);
   ec.setMaxClusterSize(15000);
   ec.setSearchMethod(search);
   ec.setInputCloud(cloud);
