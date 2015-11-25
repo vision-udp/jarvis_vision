@@ -30,10 +30,16 @@ class simple_visualizer {
 public:
   simple_visualizer();
   ~simple_visualizer();
-  void loop();
+  void set_full_screen(bool value) { full_screen = value; }
+  void start();
+  void stop();
+  bool was_stopped() const;
+  void spin_once();
+  void spin();
   void show_cloud(const cloud_ptr &cloud, const std::string &id = "cloud");
 
 private:
+  bool full_screen{};
   std::unique_ptr<viewer_t> viewer;
 };
 
