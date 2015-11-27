@@ -119,7 +119,10 @@ private:
     for (size_t i = 0; i < clusters.size(); ++i) {
       const std::vector<int> &indices = clusters[i].indices;
       const auto cluster_cloud = boost::make_shared<cloud_t>(*cloud, indices);
+      clog << "Classifing cluster of size " << indices.size() << '\n';
+      clog << "===================================" << endl;
       clusters_info[i] = classify_object<PointT>(cluster_cloud);
+      clog << endl;
     }
     timer.finish();
   }

@@ -20,8 +20,6 @@
 #include <cstddef>   // For std::size_t
 #include <cstdint>   // For SIZE_MAX
 
-#include <iostream> // For std::clog
-
 // ==========================================
 // Global namespace visibility
 // ==========================================
@@ -92,14 +90,7 @@ object_info jarvis::classify_object(const cloud_const_ptr<PointT> &cloud) {
 
   prob[cyl_id] = mr.test_cylinder(coeffs[cyl_id]);
   prob[sphere_id] = mr.test_sphere(coeffs[sphere_id]);
-
-  std::clog << std::fixed;
-  std::clog.precision(2);
-  std::clog << "Classifing cluster: ";
-  std::clog << "cylinder prob=" << prob[cyl_id];
-  std::clog << ", sphere prob=" << prob[sphere_id];
-  std::clog << ", cube prob=" << prob[cube_id];
-  std::clog << std::endl;
+  prob[cube_id] = mr.test_cube();
 
   const auto selected_it = std::max_element(std::begin(prob), std::end(prob));
   const size_t selected = static_cast<size_t>(selected_it - std::begin(prob));
