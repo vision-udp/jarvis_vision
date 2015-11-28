@@ -48,6 +48,12 @@ public:
   ///
   double test_sphere(pcl::ModelCoefficients &coeffs);
 
+  /// \brief Tests if the input cloud could be a cube.
+  ///
+  /// \returns The probability that the test is true.
+  ///
+  double test_cube();
+
 private:
   cloud_const_ptr cloud;
   normals_const_ptr normals;

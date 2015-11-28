@@ -7,6 +7,7 @@
 
 #include <jarvis/model_recognition.hpp>
 
+#include <boost/algorithm/clamp.hpp>
 #include <boost/make_shared.hpp>    // for make_shared
 #include <pcl/ModelCoefficients.h>  // for ModelCoefficients
 #include <pcl/point_cloud.h>        // for PointCloud
@@ -20,13 +21,12 @@
 #include <cstddef>   // For std::size_t
 #include <cstdint>   // For SIZE_MAX
 
-#include <iostream> // For std::clog
-
 // ==========================================
 // Global namespace visibility
 // ==========================================
 
 using namespace jarvis;
+using boost::algorithm::clamp;
 using boost::make_shared;
 using boost::shared_ptr;
 using pcl::ModelCoefficients;
@@ -56,11 +56,12 @@ template <typename PointT>
 static cloud_ptr<Normal>
 make_normals(const cloud_const_ptr<PointT> &cloud,
              const shared_ptr<Search<PointT>> &search) {
-
   pcl::NormalEstimation<PointT, Normal> ne;
   ne.setSearchMethod(search);
   ne.setInputCloud(cloud);
-  ne.setKSearch(50);
+
+  const auto optimal_k = static_cast<int>(cloud->size() * 0.1);
+  ne.setKSearch(clamp(optimal_k, 10, 80));
 
   auto normals = make_shared<PointCloud<Normal>>();
   ne.compute(*normals);
@@ -92,14 +93,7 @@ object_info jarvis::classify_object(const cloud_const_ptr<PointT> &cloud) {
 
   prob[cyl_id] = mr.test_cylinder(coeffs[cyl_id]);
   prob[sphere_id] = mr.test_sphere(coeffs[sphere_id]);
-
-  std::clog << std::fixed;
-  std::clog.precision(2);
-  std::clog << "Classifing cluster: ";
-  std::clog << "cylinder prob=" << prob[cyl_id];
-  std::clog << ", sphere prob=" << prob[sphere_id];
-  std::clog << ", cube prob=" << prob[cube_id];
-  std::clog << std::endl;
+  prob[cube_id] = mr.test_cube();
 
   const auto selected_it = std::max_element(std::begin(prob), std::end(prob));
   const size_t selected = static_cast<size_t>(selected_it - std::begin(prob));

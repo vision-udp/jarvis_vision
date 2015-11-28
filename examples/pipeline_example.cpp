@@ -60,11 +60,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  const auto pcd_files = get_pcd_files(argv[1]);
-  clog << pcd_files.size() << " PCD files to be processed.\n";
-  const bool is_regular_file = fs::is_regular_file(argv[1]);
-
   try {
+    const auto pcd_files = get_pcd_files(argv[1]);
+    clog << pcd_files.size() << " PCD files to be processed.\n";
+    const bool is_regular_file = fs::is_regular_file(argv[1]);
     simple_visualizer<pcl::PointXYZRGBA> viewer;
     viewer.set_full_screen(true);
     if (!is_regular_file)

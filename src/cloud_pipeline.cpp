@@ -7,6 +7,7 @@
 
 #include <jarvis/colorize.hpp>
 #include <jarvis/classification.hpp>
+#include <jarvis/filtering.hpp>
 #include <jarvis/plane_extraction.hpp>
 #include <jarvis/steady_timer.hpp>
 
@@ -16,7 +17,6 @@
 
 #include <boost/make_shared.hpp>               // for make_shared
 #include <pcl/point_types.h>                   // for PointXYZ, Normal
-#include <pcl/filters/filter.h>                // for removeNaNFromPointCloud
 #include <pcl/search/kdtree.h>                 // for KdTree
 #include <pcl/segmentation/extract_clusters.h> // EuclideanClusterExtraction
 
@@ -47,14 +47,6 @@ using cloud_const_ptr = boost::shared_ptr<const PointCloud<PointT>>;
 // ==========================================
 
 template <typename PointT>
-static cloud_ptr<PointT> remove_nans(const PointCloud<PointT> &input_cloud) {
-  std::vector<int> indices;
-  const auto cloud = make_shared<PointCloud<PointT>>();
-  pcl::removeNaNFromPointCloud(input_cloud, *cloud, indices);
-  return cloud;
-}
-
-template <typename PointT>
 static auto make_kdtree() {
   using kdtree_t = pcl::search::KdTree<PointT>;
   return make_shared<kdtree_t>(false);
@@ -70,63 +62,76 @@ class pipeline_manager {
   using cloud_t = pcl::PointCloud<PointT>;
 
 public:
-  pipeline_manager(const cloud_t &input_cloud) {
-    clog << "Total points: " << input_cloud.size() << endl;
-    timer.run("Removing NaNs");
-    cloud = remove_nans(input_cloud);
-    timer.finish();
-    clog << "Total NonNans points: " << cloud->size() << endl;
+  pipeline_manager(const boost::shared_ptr<const cloud_t> &input_cloud) {
+    original_cloud = input_cloud;
   }
 
   void run() {
+    timer.run("Applying filters");
+    apply_filters();
+    timer.finish();
+    clog << "Original cloud size: " << original_cloud->size() << '\n';
+    clog << "Filtered cloud size: " << cloud->size() << '\n';
+
+    timer.run("Extracting planes");
     extract_planes();
+    timer.finish();
+    clog << "Number of found planes: ";
+    clog << plane_extractor.get_num_planes() << '\n';
+    clog << "Number of remaining points: ";
+    clog << plane_extractor.get_remaining_indices()->indices.size() << '\n';
+
+    timer.run("Clustering");
     clusterize();
+    timer.finish();
+    clog << "Number of found clusters: " << clusters.size() << endl;
+
+    timer.run("Processing clusters");
     classify_clusters();
+    timer.finish();
   }
 
   cloud_ptr<pcl::PointXYZRGBA> get_colored_cloud() const;
 
 private:
+  void apply_filters() {
+    cloud_filter<PointT> filter;
+    filter.set_input_cloud(original_cloud);
+    filter.set_leaf_size(0.005f);
+    cloud = filter.filter_input_cloud();
+  }
+
   void extract_planes() {
-    timer.run("Extracting planes");
     plane_extractor.set_input_cloud(cloud);
-    plane_extractor.set_min_points(25000);
+    plane_extractor.set_min_points(10000);
     plane_extractor.extract_planes();
-    timer.finish();
-    const size_t num_planes = plane_extractor.get_num_planes();
-    std::clog << "Number of found planes: " << num_planes << '\n';
   }
 
   void clusterize() {
     const auto remaining = plane_extractor.get_remaining_indices();
-    clog << "Number of remaining points: " << remaining->indices.size() << '\n';
-    timer.run("Clustering");
     pcl::EuclideanClusterExtraction<PointT> ec;
     ec.setClusterTolerance(0.02);
-    ec.setMinClusterSize(300);
-    ec.setMaxClusterSize(15000);
+    ec.setMinClusterSize(100);
+    ec.setMaxClusterSize(10000);
     ec.setSearchMethod(make_kdtree<PointT>());
     ec.setInputCloud(cloud);
     ec.setIndices(remaining);
     ec.extract(clusters);
-    timer.finish();
-    clog << "Number of found clusters: " << clusters.size() << endl;
   }
 
   void classify_clusters() {
-    timer.run("Processing clusters");
     clusters_info.resize(clusters.size());
     for (size_t i = 0; i < clusters.size(); ++i) {
       const std::vector<int> &indices = clusters[i].indices;
       const auto cluster_cloud = boost::make_shared<cloud_t>(*cloud, indices);
       clusters_info[i] = classify_object<PointT>(cluster_cloud);
     }
-    timer.finish();
   }
 
 private:
   mutable steady_timer timer;
-  boost::shared_ptr<pcl::PointCloud<PointT>> cloud;
+  boost::shared_ptr<const cloud_t> original_cloud;
+  boost::shared_ptr<cloud_t> cloud;
   plane_extractor<PointT> plane_extractor;
   std::vector<PointIndices> clusters;
   std::vector<object_info> clusters_info;
@@ -198,7 +203,7 @@ pipeline_manager<PointT>::get_colored_cloud() const {
 // ==========================================
 
 void cloud_pipeline::process(const cloud_const_ptr &input_cloud) {
-  pipeline_manager<pcl::PointXYZ> manager(*input_cloud);
+  pipeline_manager<pcl::PointXYZ> manager(input_cloud);
   manager.run();
   colored_cloud = manager.get_colored_cloud();
 }
