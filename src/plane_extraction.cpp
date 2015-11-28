@@ -35,8 +35,8 @@ std::size_t plane_extractor<PointT>::extract_planes() {
   seg.setModelType(pcl::SACMODEL_PLANE);
   seg.setMethodType(pcl::SAC_RANSAC);
   seg.setDistanceThreshold(0.03);
-  seg.setProbability(0.2);
-  seg.setMaxIterations(50);
+  seg.setProbability(0.9);
+  seg.setMaxIterations(60);
   seg.setInputCloud(cloud);
 
   // Clear output variables
