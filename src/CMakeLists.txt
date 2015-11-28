@@ -1,5 +1,14 @@
 add_library(jarvis_vision 
   "jarvis.cpp"
+  "classification.cpp"
+  "cloud_io.cpp"
+  "cloud_pipeline.cpp"
+  "colorize.cpp"
+  "filtering.cpp"
+  "model_recognition.cpp"
+  "plane_extraction.cpp"
+  "simple_visualizer.cpp"
+  "steady_timer.cpp"
   )
 
 target_include_directories(jarvis_vision PUBLIC "${CMAKE_SOURCE_DIR}/include")
@@ -14,13 +23,14 @@ target_compile_features(jarvis_vision PUBLIC
 
 configure_jarvis_target(jarvis_vision)
 
-# TODO: Change PUBLIC to PRIVATE
-target_include_directories(jarvis_vision SYSTEM PUBLIC 
-  ${PCL_INCLUDE_DIRS} 
-  ${Boost_INCLUDE_DIRS})
+target_include_directories(jarvis_vision SYSTEM PUBLIC
+  ${PCL_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
+)
 
 target_compile_definitions(jarvis_vision PUBLIC ${PCL_DEFINITIONS})
 
-target_link_libraries(jarvis_vision PUBLIC
+target_link_libraries(jarvis_vision PRIVATE
   ${PCL_LIBRARIES}
-  ${Boost_LIBRARIES})
+  ${Boost_LIBRARIES}
+)

@@ -1,1 +1,1 @@
-add_jarvis_executable("matching_global_pipeline" main.cpp)
+add_jarvis_executable("global_matching_pipeline" main.cpp)
