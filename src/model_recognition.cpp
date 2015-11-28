@@ -14,6 +14,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/segmentation/sac_segmentation.h>
 
+#include <cmath>    // for std::fabs
 #include <iterator> // for std::back_inserter
 #include <utility>  // for std::swap
 #include <iostream> // for std::clog
@@ -119,8 +120,8 @@ double model_recognition<PointT, PointNT>::test_cube() {
   seg.setInputCloud(cloud);
   seg.setInputNormals(normals);
   seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setProbability(0.3);
-  seg.setMaxIterations(50);
+  seg.setProbability(0.9);
+  seg.setMaxIterations(60);
   seg.setOptimizeCoefficients(true);
   seg.setDistanceThreshold(0.02);
   seg.setNormalDistanceWeight(0.03);
