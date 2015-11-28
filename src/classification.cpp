@@ -7,6 +7,7 @@
 
 #include <jarvis/model_recognition.hpp>
 
+#include <boost/algorithm/clamp.hpp>
 #include <boost/make_shared.hpp>    // for make_shared
 #include <pcl/ModelCoefficients.h>  // for ModelCoefficients
 #include <pcl/point_cloud.h>        // for PointCloud
@@ -25,6 +26,7 @@
 // ==========================================
 
 using namespace jarvis;
+using boost::algorithm::clamp;
 using boost::make_shared;
 using boost::shared_ptr;
 using pcl::ModelCoefficients;
@@ -54,11 +56,12 @@ template <typename PointT>
 static cloud_ptr<Normal>
 make_normals(const cloud_const_ptr<PointT> &cloud,
              const shared_ptr<Search<PointT>> &search) {
-
   pcl::NormalEstimation<PointT, Normal> ne;
   ne.setSearchMethod(search);
   ne.setInputCloud(cloud);
-  ne.setKSearch(50);
+
+  const auto optimal_k = static_cast<int>(cloud->size() * 0.1);
+  ne.setKSearch(clamp(optimal_k, 10, 80));
 
   auto normals = make_shared<PointCloud<Normal>>();
   ne.compute(*normals);

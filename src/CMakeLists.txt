@@ -4,6 +4,7 @@ add_library(jarvis_vision
   "cloud_io.cpp"
   "cloud_pipeline.cpp"
   "colorize.cpp"
+  "filtering.cpp"
   "model_recognition.cpp"
   "plane_extraction.cpp"
   "simple_visualizer.cpp"

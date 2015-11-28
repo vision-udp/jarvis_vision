@@ -68,12 +68,11 @@ model_recognition<PointT, PointNT>::test_cylinder(ModelCoefficients &coeffs) {
   seg.setNormalDistanceWeight(0.1);
 
   seg.setOptimizeCoefficients(true);
-  seg.setProbability(0.9);
   seg.setMaxIterations(500);
 
   seg.segment(inliers, coeffs);
 
-  if (inliers_ratio(inliers, *cloud) < 0.6)
+  if (inliers_ratio(inliers, *cloud) < 0.68)
     return 0.0;
 
   return inliers_ratio(inliers, *cloud);
@@ -170,9 +169,10 @@ double model_recognition<PointT, PointNT>::test_cube() {
   if (plane2_ratio < 0.2 || plane2_ratio > 0.8)
     return 0;
 
-  if (plane1_ratio + plane2_ratio < 0.7)
+  if (plane1_ratio + plane2_ratio < 0.8)
     return 0;
 
+  // PD: Third plane search is still remaining as still there is no sample.
   return plane1_ratio + plane2_ratio;
 }
 
