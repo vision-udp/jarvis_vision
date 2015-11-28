@@ -7,19 +7,17 @@
 
 #include <jarvis/model_recognition.hpp>
 
-#include <boost/algorithm/clamp.hpp>
-#include <boost/make_shared.hpp>    // for make_shared
-#include <pcl/ModelCoefficients.h>  // for ModelCoefficients
-#include <pcl/point_cloud.h>        // for PointCloud
-#include <pcl/point_types.h>        // for PointXYZ, PointXYZRGBA
-#include <pcl/features/normal_3d.h> // for NormalEstimation
-#include <pcl/search/search.h>      // for Search
-#include <pcl/search/kdtree.h>      // for KdTree
+#include <pcl/ModelCoefficients.h>
+#include <pcl/point_cloud.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/search/kdtree.h>
 
-#include <algorithm> // For std::max_element
-#include <iterator>  // For std::begin, std::end
-#include <cstddef>   // For std::size_t
-#include <cstdint>   // For SIZE_MAX
+#include <boost/algorithm/clamp.hpp>
+#include <boost/range/algorithm/max_element.hpp>
+#include <boost/make_shared.hpp>
+
+#include <array>
+#include <cstddef> // for std::size_t
 
 // ==========================================
 // Global namespace visibility
@@ -27,55 +25,61 @@
 
 using namespace jarvis;
 using boost::algorithm::clamp;
-using boost::make_shared;
 using boost::shared_ptr;
 using pcl::ModelCoefficients;
 using pcl::PointCloud;
 using pcl::Normal;
-using pcl::search::Search;
 using std::size_t;
-
-template <typename PointT>
-using cloud_ptr = boost::shared_ptr<pcl::PointCloud<PointT>>;
-
-template <typename PointT>
-using cloud_const_ptr = boost::shared_ptr<const pcl::PointCloud<PointT>>;
 
 // ==========================================
 // Auxiliary functions
 // ==========================================
 
-template <typename PointT>
-static shared_ptr<Search<PointT>>
-make_search_method(const cloud_const_ptr<PointT> &) {
-  using kdtree_t = pcl::search::KdTree<PointT>;
-  return boost::make_shared<kdtree_t>(false);
-}
+namespace {
 
 template <typename PointT>
-static cloud_ptr<Normal>
-make_normals(const cloud_const_ptr<PointT> &cloud,
-             const shared_ptr<Search<PointT>> &search) {
-  pcl::NormalEstimation<PointT, Normal> ne;
-  ne.setSearchMethod(search);
-  ne.setInputCloud(cloud);
+class classifier_impl {
+  using cloud_t = PointCloud<PointT>;
+  using cloud_const_ptr = shared_ptr<const cloud_t>;
+  using normals_t = PointCloud<Normal>;
+  using normals_ptr = shared_ptr<normals_t>;
+  using search_t = pcl::search::Search<PointT>;
+  using search_ptr = shared_ptr<search_t>;
 
-  const auto optimal_k = static_cast<int>(cloud->size() * 0.1);
-  ne.setKSearch(clamp(optimal_k, 10, 80));
+public:
+  object_info classify(const cloud_const_ptr &input_cloud);
 
-  auto normals = make_shared<PointCloud<Normal>>();
-  ne.compute(*normals);
-  return normals;
-}
+private:
+  void make_search_method() {
+    using kdtree_t = pcl::search::KdTree<PointT>;
+    search = boost::make_shared<kdtree_t>(false);
+  }
 
-// ==========================================
-// classify_object definition
-// ==========================================
+  void make_normals() {
+    pcl::NormalEstimation<PointT, Normal> ne;
+    ne.setSearchMethod(search);
+    ne.setInputCloud(cloud);
+
+    const auto optimal_k = static_cast<int>(cloud->size() * 0.1);
+    ne.setKSearch(clamp(optimal_k, 10, 80));
+
+    normals = boost::make_shared<PointCloud<Normal>>();
+    ne.compute(*normals);
+  }
+
+private:
+  cloud_const_ptr cloud;
+  search_ptr search;
+  normals_ptr normals;
+};
+} // end anonymous namespace
 
 template <typename PointT>
-object_info jarvis::classify_object(const cloud_const_ptr<PointT> &cloud) {
-  const auto search = make_search_method(cloud);
-  const auto normals = make_normals(cloud, search);
+object_info
+classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
+  cloud = input_cloud;
+  make_search_method();
+  make_normals();
 
   model_recognition<PointT, Normal> mr;
   mr.set_input_cloud(cloud);
@@ -88,15 +92,15 @@ object_info jarvis::classify_object(const cloud_const_ptr<PointT> &cloud) {
   const size_t cyl_id = 0;
   const size_t sphere_id = 1;
   const size_t cube_id = 2;
-  double prob[3] = {};
-  ModelCoefficients coeffs[3];
+  std::array<double, 3> prob{};
+  std::array<ModelCoefficients, 3> coeffs{};
 
   prob[cyl_id] = mr.test_cylinder(coeffs[cyl_id]);
   prob[sphere_id] = mr.test_sphere(coeffs[sphere_id]);
   prob[cube_id] = mr.test_cube();
 
-  const auto selected_it = std::max_element(std::begin(prob), std::end(prob));
-  const size_t selected = static_cast<size_t>(selected_it - std::begin(prob));
+  const auto selected =
+      static_cast<size_t>(boost::max_element(prob) - prob.begin());
 
   if (prob[selected] < 0.5)
     return res;
@@ -123,11 +127,24 @@ object_info jarvis::classify_object(const cloud_const_ptr<PointT> &cloud) {
 }
 
 // ==========================================
+// classify_object definition
+// ==========================================
+
+template <typename PointT>
+object_info
+jarvis::classify_object(const shared_ptr<const PointCloud<PointT>> &cloud) {
+  classifier_impl<PointT> classifier;
+  return classifier.classify(cloud);
+}
+
+// ==========================================
 // Template instantations
 // ==========================================
 
-template object_info
-jarvis::classify_object(const cloud_const_ptr<pcl::PointXYZ> &cloud);
+#include <pcl/point_types.h> // for PointXYZ, PointXYZRGBA
 
-template object_info
-jarvis::classify_object(const cloud_const_ptr<pcl::PointXYZRGBA> &cloud);
+template object_info jarvis::classify_object(
+    const shared_ptr<const PointCloud<pcl::PointXYZ>> &cloud);
+
+template object_info jarvis::classify_object(
+    const shared_ptr<const PointCloud<pcl::PointXYZRGBA>> &cloud);

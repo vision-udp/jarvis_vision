@@ -181,5 +181,7 @@ double model_recognition<PointT, PointNT>::test_cube() {
 // Template instantations
 // ==========================================
 
+#include <pcl/point_types.h>
+
 template class jarvis::model_recognition<pcl::PointXYZ, pcl::Normal>;
 template class jarvis::model_recognition<pcl::PointXYZRGBA, pcl::Normal>;

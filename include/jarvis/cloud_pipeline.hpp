@@ -11,9 +11,10 @@
 
 namespace jarvis {
 
+template <typename PointT>
 class cloud_pipeline {
 public:
-  using cloud_t = pcl::PointCloud<pcl::PointXYZ>;
+  using cloud_t = pcl::PointCloud<PointT>;
   using cloud_const_ptr = boost::shared_ptr<const cloud_t>;
 
 public:

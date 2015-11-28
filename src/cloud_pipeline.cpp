@@ -11,58 +11,42 @@
 #include <jarvis/plane_extraction.hpp>
 #include <jarvis/steady_timer.hpp>
 
+#include <boost/make_shared.hpp>
 #include <iostream> // for clog
-#include <cassert>  // for assert
-#include <cstdint>  // for uint8_t
+#include <vector>
+#include <cstdint> // for uint8_t
 
-#include <boost/make_shared.hpp>               // for make_shared
-#include <pcl/point_types.h>                   // for PointXYZ, Normal
-#include <pcl/search/kdtree.h>                 // for KdTree
-#include <pcl/segmentation/extract_clusters.h> // EuclideanClusterExtraction
+#include <pcl/point_types.h> // for PointXYZ, PointRGBA
+#include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 // ==========================================
-// Using directives
+// Global namespace visibility
 // ==========================================
 
 using namespace jarvis;
 
 using boost::make_shared;
 using boost::shared_ptr;
-using pcl::ModelCoefficients;
 using pcl::PointCloud;
 using pcl::PointIndices;
+using pcl::PointXYZRGBA;
 using std::size_t;
 using std::uint8_t;
 using std::clog;
 using std::endl;
 
-template <typename PointT>
-using cloud_ptr = boost::shared_ptr<PointCloud<PointT>>;
-
-template <typename PointT>
-using cloud_const_ptr = boost::shared_ptr<const PointCloud<PointT>>;
-
 // ==========================================
-// Auxiliary functions
-// ==========================================
-
-template <typename PointT>
-static auto make_kdtree() {
-  using kdtree_t = pcl::search::KdTree<PointT>;
-  return make_shared<kdtree_t>(false);
-}
-
-// ==========================================
-// Auxiliary class
+// cloud_pipeline_impl
 // ==========================================
 
 namespace {
 template <typename PointT>
-class pipeline_manager {
-  using cloud_t = pcl::PointCloud<PointT>;
+class cloud_pipeline_impl {
+  using cloud_t = PointCloud<PointT>;
 
 public:
-  pipeline_manager(const boost::shared_ptr<const cloud_t> &input_cloud) {
+  cloud_pipeline_impl(const shared_ptr<const cloud_t> &input_cloud) {
     original_cloud = input_cloud;
   }
 
@@ -91,7 +75,7 @@ public:
     timer.finish();
   }
 
-  cloud_ptr<pcl::PointXYZRGBA> get_colored_cloud() const;
+  shared_ptr<PointCloud<PointXYZRGBA>> make_colored_cloud() const;
 
 private:
   void apply_filters() {
@@ -108,12 +92,15 @@ private:
   }
 
   void clusterize() {
+    using kdtree_t = pcl::search::KdTree<PointT>;
+    const auto search = make_shared<kdtree_t>(false);
+
     const auto remaining = plane_extractor.get_remaining_indices();
     pcl::EuclideanClusterExtraction<PointT> ec;
     ec.setClusterTolerance(0.02);
     ec.setMinClusterSize(100);
     ec.setMaxClusterSize(10000);
-    ec.setSearchMethod(make_kdtree<PointT>());
+    ec.setSearchMethod(search);
     ec.setInputCloud(cloud);
     ec.setIndices(remaining);
     ec.extract(clusters);
@@ -130,8 +117,8 @@ private:
 
 private:
   mutable steady_timer timer;
-  boost::shared_ptr<const cloud_t> original_cloud;
-  boost::shared_ptr<cloud_t> cloud;
+  shared_ptr<const cloud_t> original_cloud;
+  shared_ptr<cloud_t> cloud;
   plane_extractor<PointT> plane_extractor;
   std::vector<PointIndices> clusters;
   std::vector<object_info> clusters_info;
@@ -139,22 +126,22 @@ private:
 } // end anonymous namespace
 
 template <typename PointT>
-cloud_ptr<pcl::PointXYZRGBA>
-pipeline_manager<PointT>::get_colored_cloud() const {
+shared_ptr<PointCloud<PointXYZRGBA>>
+cloud_pipeline_impl<PointT>::make_colored_cloud() const {
   timer.run("Creating colored cloud");
   const rgba_color red{255, 0, 0};
   const rgba_color green{0, 255, 0};
   const rgba_color cyan{0, 255, 255};
   const rgba_color magenta{255, 0, 255};
 
-  const auto colored_cloud = make_colored_cloud(*cloud, red);
+  const auto colored_cloud = jarvis::make_colored_cloud(*cloud, red);
 
   const size_t num_planes = plane_extractor.get_num_planes();
   for (size_t i = 0; i < num_planes; ++i) {
     const auto &inliers = plane_extractor.get_inliers(i);
     const auto blue_scale =
         static_cast<double>(inliers.indices.size()) / cloud->size();
-    const uint8_t blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
+    const auto blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
     colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
   }
 
@@ -199,11 +186,19 @@ pipeline_manager<PointT>::get_colored_cloud() const {
 }
 
 // ==========================================
-// cloud_pipeline definitions
+// cloud_pipeline
 // ==========================================
 
-void cloud_pipeline::process(const cloud_const_ptr &input_cloud) {
-  pipeline_manager<pcl::PointXYZ> manager(input_cloud);
-  manager.run();
-  colored_cloud = manager.get_colored_cloud();
+template <typename PointT>
+void cloud_pipeline<PointT>::process(const cloud_const_ptr &input_cloud) {
+  cloud_pipeline_impl<PointT> pipeline(input_cloud);
+  pipeline.run();
+  colored_cloud = pipeline.make_colored_cloud();
 }
+
+// ==========================================
+// Template instantations
+// ==========================================
+
+template class jarvis::cloud_pipeline<pcl::PointXYZ>;
+template class jarvis::cloud_pipeline<pcl::PointXYZRGBA>;

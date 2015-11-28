@@ -5,7 +5,7 @@
 
 #include <jarvis/steady_timer.hpp>
 
-#include <iostream> // for std::clog
+#include <iostream> // for std::clog, std::endl
 
 using namespace jarvis;
 using std::clog;
