@@ -7,21 +7,20 @@
 #define JARVIS_PLANE_EXTRACTION_HPP
 
 #include <jarvis/pcl_fwd.hpp>
-#include <vector>                  // for std::vector
-#include <cassert>                 // for assert
-#include <cstddef>                 // for std::size_t
-#include <boost/shared_ptr.hpp>    // for boost::shared_ptr
-#include <pcl/ModelCoefficients.h> // for ModelCoefficients
-#include <pcl/PointIndices.h>      // for PointIndices
+#include <pcl/ModelCoefficients.h>
+#include <pcl/PointIndices.h>
+
+#include <boost/shared_ptr.hpp>
+#include <vector>
+#include <cassert>
+#include <cstddef> // for std::size_t
 
 namespace jarvis {
 
 template <typename PointT>
 class plane_extractor {
   using cloud_t = pcl::PointCloud<PointT>;
-  using normals_t = pcl::PointCloud<pcl::Normal>;
   using cloud_const_ptr = boost::shared_ptr<const cloud_t>;
-  using normals_const_ptr = boost::shared_ptr<const normals_t>;
 
 public:
   /// \brief Sets the input cloud.
@@ -41,14 +40,6 @@ public:
     indices = input_indices;
   }
 
-  /// \brief Sets the normals of the input cloud.
-  ///
-  /// \param input_normals The normals of the input cloud.
-  ///
-  void set_input_normals(const normals_const_ptr &input_normals) {
-    normals = input_normals;
-  }
-
   /// \brief Sets the minimum of points allowed to a plane.
   ///
   /// \param value The value to set.
@@ -62,12 +53,6 @@ public:
   /// \returns The number of extracted planes.
   ///
   std::size_t extract_planes();
-
-  /// \brief Extract the planes from the input cloud by using its normals.
-  ///
-  /// \returns The number of extracted planes.
-  ///
-  std::size_t extract_planes_from_normals();
 
   /// \brief Returns the number of planes extracted in the last execution.
   ///
@@ -99,7 +84,6 @@ public:
 
 private:
   cloud_const_ptr cloud;
-  normals_const_ptr normals;
   std::size_t min_points{10000};
   boost::shared_ptr<const pcl::PointIndices> indices;
   boost::shared_ptr<pcl::PointIndices> rem;

@@ -4,10 +4,6 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #include <jarvis/simple_visualizer.hpp>
-
-#include <chrono> // For std::chrono_literals
-#include <thread> // For std::this_thread::sleep_for
-#include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
 namespace jarvis {
@@ -60,8 +56,9 @@ void simple_visualizer<PointT>::show_cloud(const cloud_ptr &cloud,
 // Template instantiations
 // =====================================
 
+#include <pcl/point_types.h>
+
 template class simple_visualizer<pcl::PointXYZ>;
-template class simple_visualizer<pcl::PointXYZRGB>;
 template class simple_visualizer<pcl::PointXYZRGBA>;
 
 } // end namespace jarvis

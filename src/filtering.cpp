@@ -5,11 +5,10 @@
 
 #include <jarvis/filtering.hpp>
 
-#include <boost/make_shared.hpp>    // for make_shared
-#include <pcl/point_types.h>        // for PointXYZ, PointXYZRGBA
-#include <pcl/filters/filter.h>     // for removeNaNFromPointCloud
-#include <pcl/filters/voxel_grid.h> // for VoxelGrid
-#include <vector>                   // for std::vector
+#include <boost/make_shared.hpp>
+#include <pcl/filters/filter.h> // for removeNaNFromPointCloud
+#include <pcl/filters/voxel_grid.h>
+#include <vector>
 
 // ==========================================
 // Global namespace visibility
@@ -42,6 +41,8 @@ shared_ptr<PointCloud<PointT>> cloud_filter<PointT>::filter_input_cloud() {
 // ==========================================
 // Template instantations
 // ==========================================
+
+#include <pcl/point_types.h> // for PointXYZ, PointXYZRGBA
 
 template class jarvis::cloud_filter<pcl::PointXYZ>;
 template class jarvis::cloud_filter<pcl::PointXYZRGBA>;

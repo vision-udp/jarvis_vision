@@ -5,20 +5,25 @@
 
 #include <jarvis/colorize.hpp>
 
-#include <boost/make_shared.hpp> // for make_shared
-#include <pcl/point_cloud.h>     // for point_cloud
-#include <pcl/point_types.h>     // for PointXYZ, PointXYZRGBA
-#include <pcl/PointIndices.h>    // for PointIndices
+#include <type_traits> // for is_pod
+#include <boost/make_shared.hpp>
+
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h> // for PointXYZ, PointXYZRGBA
+#include <pcl/PointIndices.h>
 
 using boost::make_shared;
 using boost::shared_ptr;
 using pcl::PointCloud;
-using pcl::PointXYZ;
 using pcl::PointXYZRGBA;
 using pcl::PointIndices;
 
+static_assert(std::is_pod<jarvis::rgba_color>::value,
+              "rgba_color should be a POD structure.");
+
+template <typename PointT>
 shared_ptr<PointCloud<PointXYZRGBA>>
-jarvis::make_colored_cloud(const PointCloud<PointXYZ> &cloud,
+jarvis::make_colored_cloud(const PointCloud<PointT> &cloud,
                            const rgba_color color) {
 
   using colored_cloud_t = PointCloud<PointXYZRGBA>;
@@ -47,3 +52,9 @@ void jarvis::colorize(PointCloud<PointXYZRGBA> &cloud,
     p.r = color.r, p.g = color.g, p.b = color.b, p.a = color.a;
   }
 }
+
+template shared_ptr<PointCloud<PointXYZRGBA>>
+jarvis::make_colored_cloud(const PointCloud<pcl::PointXYZ> &, rgba_color);
+
+template shared_ptr<PointCloud<PointXYZRGBA>>
+jarvis::make_colored_cloud(const PointCloud<pcl::PointXYZRGBA> &, rgba_color);
