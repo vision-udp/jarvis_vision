@@ -1,5 +1,4 @@
 add_library(jarvis_vision 
-  "jarvis.cpp"
   "classification.cpp"
   "cloud_io.cpp"
   "cloud_pipeline.cpp"
@@ -26,6 +25,7 @@ configure_jarvis_target(jarvis_vision)
 target_include_directories(jarvis_vision SYSTEM PUBLIC
   ${PCL_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 target_compile_definitions(jarvis_vision PUBLIC ${PCL_DEFINITIONS})
@@ -33,4 +33,5 @@ target_compile_definitions(jarvis_vision PUBLIC ${PCL_DEFINITIONS})
 target_link_libraries(jarvis_vision PRIVATE
   ${PCL_LIBRARIES}
   ${Boost_LIBRARIES}
+  ${OpenCV_LIBRARIES}
 )

@@ -2,7 +2,6 @@
 #include <boost/program_options.hpp>
 
 #include <iostream>
-#include <regex>
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
@@ -51,16 +50,18 @@ static bool check_directory(const fs::path &path) {
   return true;
 }
 
-static std::vector<fs::path> frames_from_path(const fs::path &directory_path) {
-  std::vector<fs::path> framespaths;
-  std::regex frame_regex("frame_[0-9]{1,6}.pcd");
-  for (const auto &entry : fs::directory_iterator(directory_path)) {
-    auto path = entry.path();
-    if (fs::is_regular_file(entry.status()) &&
-        std::regex_match(path.filename().c_str(), frame_regex))
-      framespaths.push_back(path);
+static std::vector<fs::path> frames_from_path(const fs::path &input_path) {
+  if (fs::is_regular_file(input_path))
+    return std::vector<fs::path>({input_path});
+
+  std::vector<fs::path> frames_paths;
+  for (const auto &entry : fs::directory_iterator(input_path)) {
+    const auto &path = entry.path();
+    if (!fs::is_regular_file(entry.status()) || path.extension() != ".pcd")
+      continue;
+    frames_paths.push_back(path);
   }
-  return framespaths;
+  return frames_paths;
 }
 
 int main(int argc, char *argv[]) {

@@ -8,6 +8,8 @@
 #include <thread>
 #include <iostream>
 
+#include <jarvis/simple_visualizer.hpp>
+
 #include <boost/make_shared.hpp>
 
 #include <pcl/console/parse.h>
@@ -25,34 +27,34 @@ public:
     using pcl::console::print_error;
     using namespace std::chrono_literals;
 
-    viewer.setBackgroundColor(0, 0, 0);
-    viewer.initCameraParameters();
-    viewer.setCameraPosition(0.0, -0.3, -0.2, 0.0, -0.3, 1.0, 0.0, -1.0, 0.0);
-
     try {
       pcl::io::loadPCDFile<PointT>(filename, *cloud);
     } catch (pcl::PCLException e) {
       print_error("Error reading %s\n", filename);
     }
 
-    viewer.addPointCloud(cloud, "Cloud");
+    viewer.start();
+    viewer.show_cloud(cloud, "Cloud");
 
-    while (!viewer.wasStopped()) {
+    while (!viewer.was_stopped()) {
       std::this_thread::sleep_for(100ms);
-      viewer.spinOnce();
+      viewer.spin_once();
     }
   }
 
 private:
-  pcl::visualization::PCLVisualizer viewer;
+  jarvis::simple_visualizer<PointT> viewer;
   cloud_ptr cloud;
 };
+
+using std::clog;
 
 int main(int argc, char *argv[]) {
   using pcl::console::print_error;
   if (argc < 2) {
     print_error("Wrong number of arguments.\n");
-    return -1;
+    clog << "Usage: " << argv[0] << " <input>\n";
+    return 1;
   }
 
   pcl::PCLPointCloud2 cloud_meta;
@@ -60,6 +62,7 @@ int main(int argc, char *argv[]) {
     pcl::io::loadPCDFile(argv[1], cloud_meta);
   } catch (pcl::PCLException e) {
     print_error("Error reading file %s\n", argv[1]);
+    return -1;
   }
 
   std::cerr << "Fields: ";
