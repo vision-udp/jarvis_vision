@@ -1,22 +1,18 @@
-/// \file range_image.hpp
-/// \brief This file contains utilities to extract an image from a point cloud.
+/// \file extract_image.cpp
 /// \author Jorge Aguirre
 /// \version 1.0
-/// \date 2015-11-28
+/// \date 2015-11-29
 
-#ifndef JARVIS_IMAGE_PROJECTION
-#define JARVIS_IMAGE_PROJECTION
+#include <jarvis/extract_image.hpp>
 
 #include <pcl/common/common_headers.h>
 
-#include <opencv/cv.hpp>
-
-namespace jarvis {
-inline cv::Mat3b
-extract_image(const pcl::PointCloud<pcl::PointXYZRGBA> &cloud) {
+cv::Mat3b
+jarvis::extract_image(const pcl::PointCloud<pcl::PointXYZRGBA> &cloud) {
   auto height = static_cast<int>(cloud.height);
   auto width = static_cast<int>(cloud.width);
   auto result = cv::Mat(height, width, CV_8UC3);
+
   if (!cloud.isOrganized() || cloud.empty())
     return result;
 
@@ -30,6 +26,3 @@ extract_image(const pcl::PointCloud<pcl::PointXYZRGBA> &cloud) {
 
   return result;
 }
-}
-
-#endif

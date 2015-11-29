@@ -4,7 +4,9 @@
 /// \version 1.0
 /// \date 2015-11-28
 
-#include <jarvis/image_projection.hpp>
+#include <jarvis/extract_image.hpp>
+#include <jarvis/steady_timer.hpp>
+#include <jarvis/lu_transform.hpp>
 
 #include <iostream>
 #include <thread>
@@ -45,11 +47,16 @@ int main(int argc, char *argv[]) {
   } catch (pcl::PCLException e) {
     print_error("Error reading %s\n", argv[1]);
   }
-
+  steady_timer timer;
+  timer.run("extract image");
   cv::Mat image = extract_image(*cloud);
+  timer.finish();
 
   cv::Mat hsv, hue;
+
+  timer.run("convert to HSV");
   cv::cvtColor(image, hsv, CV_BGR2HSV);
+  timer.finish();
 
   hue.create(hsv.size(), hsv.depth());
   int ch[] = {0, 0};

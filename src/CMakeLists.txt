@@ -1,18 +1,20 @@
-add_library(jarvis_vision 
+add_library(jarvis_vision
   "classification.cpp"
   "cloud_io.cpp"
   "cloud_pipeline.cpp"
   "colorize.cpp"
+  "extract_image.cpp"
   "filtering.cpp"
   "model_recognition.cpp"
   "plane_extraction.cpp"
+  "sensor_pose.cpp"
   "simple_visualizer.cpp"
   "steady_timer.cpp"
   )
 
 target_include_directories(jarvis_vision PUBLIC "${CMAKE_SOURCE_DIR}/include")
 
-# The following command lists some features introduced in C++14. 
+# The following command lists some features introduced in C++14.
 # Thereby, CMake induces which must compile the library using a C++ standard >= 14
 target_compile_features(jarvis_vision PUBLIC
   cxx_generic_lambdas
