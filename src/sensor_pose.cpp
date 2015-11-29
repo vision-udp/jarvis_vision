@@ -13,3 +13,14 @@ Eigen::Affine3f jarvis::sensor_pose(const pcl::PointCloud<PointT> &cloud) {
   const Eigen::Translation3f translation(origin[0], origin[1], origin[2]);
   return translation * rotation;
 }
+
+// ==========================================
+// Template instantations
+// ==========================================
+
+#include <pcl/point_types.h>
+
+template Eigen::Affine3f
+jarvis::sensor_pose(const pcl::PointCloud<pcl::PointXYZ> &cloud);
+template Eigen::Affine3f
+jarvis::sensor_pose(const pcl::PointCloud<pcl::PointXYZRGBA> &cloud);

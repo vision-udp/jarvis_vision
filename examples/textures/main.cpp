@@ -5,8 +5,8 @@
 /// \date 2015-11-28
 
 #include <jarvis/extract_image.hpp>
-#include <jarvis/steady_timer.hpp>
 #include <jarvis/lu_transform.hpp>
+#include <jarvis/steady_timer.hpp>
 
 #include <iostream>
 #include <thread>
@@ -52,16 +52,34 @@ int main(int argc, char *argv[]) {
   cv::Mat image = extract_image(*cloud);
   timer.finish();
 
-  cv::Mat hsv, hue;
+  cv::Mat result;
 
-  timer.run("convert to HSV");
-  cv::cvtColor(image, hsv, CV_BGR2HSV);
+  timer.run("convert to grayscale");
+  cv::cvtColor(image, result, CV_BGR2GRAY);
   timer.finish();
 
-  hue.create(hsv.size(), hsv.depth());
-  int ch[] = {0, 0};
-  cv::mixChannels(&hsv, 1, &hue, 1, ch, 1);
+  cv::imshow("gray scale", result);
 
-  cv::imshow("hue", hue);
+  timer.run("saturate cast to 64bits floating point type");
+  result.convertTo(result, CV_64FC1);
+  timer.finish();
+
+  const size_t window_size = 8;
+  const auto height = static_cast<size_t>(result.rows) / window_size;
+  const auto width = static_cast<size_t>(result.cols) / window_size;
+  timer.run("lu transform");
+  auto params =
+      lu_transform<double, 8>(result, static_cast<ptrdiff_t>(window_size) / 2);
+  timer.finish();
+
+  for (size_t i = 0; i < height; ++i)
+    for (size_t j = 0; j < width; ++j) {
+      int x = static_cast<int>(j * window_size);
+      int y = static_cast<int>(i * window_size);
+      result(cv::Rect(x, y, window_size, window_size)) = params[i * width + j];
+    }
+  result.convertTo(result, CV_8UC1);
+
+  cv::imshow("LU-transform", result);
   cv::waitKey();
 }
