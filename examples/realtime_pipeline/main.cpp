@@ -1,0 +1,49 @@
+//          Copyright Diego Ramírez November 2015
+// Distributed under the Boost Software License, Version 1.0.
+//    (See accompanying file LICENSE_1_0.txt or copy at
+//          http://www.boost.org/LICENSE_1_0.txt)
+
+#include <jarvis/pcl_fwd.hpp>
+
+#include <jarvis/openni_grabber.hpp>
+#include <jarvis/cloud_pipeline.hpp>
+#include <jarvis/simple_visualizer.hpp>
+#include <jarvis/steady_timer.hpp>
+#include <atomic>
+#include <iostream>
+#include <csignal>
+
+using namespace jarvis;
+using pcl::PointCloud;
+using std::chrono::duration;
+using std::clog;
+using std::endl;
+
+int main() {
+  using point_t = pcl::PointXYZ;
+  steady_timer timer;
+  openni_grabber<point_t> grabber(false);
+  boost::shared_ptr<const PointCloud<point_t>> cloud;
+  cloud_pipeline<point_t> pipeline;
+  simple_visualizer<pcl::PointXYZRGBA> vis;
+  vis.start();
+  size_t num_processed_frames = 0;
+  static std::atomic<bool> signaled{false};
+  std::signal(SIGINT, [](int) { signaled = true; });
+
+  timer.run("Processing frames");
+  while (!signaled) {
+    grabber.grab(cloud);
+    pipeline.process(cloud);
+    ++num_processed_frames;
+    const auto colored_cloud = pipeline.get_colored_cloud();
+    vis.show_cloud(colored_cloud);
+    vis.spin_once();
+  }
+  auto elapsed = timer.finish();
+  const double elapsed_seconds = duration<double>(elapsed).count();
+  const double avg_fps = num_processed_frames / elapsed_seconds;
+  clog << "Num processed frames: " << num_processed_frames << '\n';
+  clog << "Elapsed time: " << elapsed_seconds << " seconds" << '\n';
+  clog << "Average frame rate: " << avg_fps << " fps" << '\n';
+}

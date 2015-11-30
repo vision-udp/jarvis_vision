@@ -6,6 +6,7 @@ add_library(jarvis_vision
   "colorize.cpp"
   "filtering.cpp"
   "model_recognition.cpp"
+  "openni_grabber.cpp"
   "plane_extraction.cpp"
   "simple_visualizer.cpp"
   "steady_timer.cpp"
