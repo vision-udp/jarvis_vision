@@ -1,1 +1,1 @@
-add_jarvis_executable("image_from_cloud" main.cpp)
+add_jarvis_executable("lu_transform" lu_transform.cpp)
