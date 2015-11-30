@@ -64,7 +64,7 @@ model_recognition<PointT, PointNT>::test_cylinder(ModelCoefficients &coeffs) {
 
   seg.setModelType(pcl::SACMODEL_CYLINDER);
   seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setRadiusLimits(0.01, 0.08);
+  seg.setRadiusLimits(0.01, 1.50);
   seg.setDistanceThreshold(0.04);
   seg.setNormalDistanceWeight(0.1);
 
@@ -94,7 +94,7 @@ model_recognition<PointT, PointNT>::test_sphere(ModelCoefficients &coeffs) {
   seg.setMaxIterations(50);
   seg.setDistanceThreshold(0.005);
   seg.setProbability(0.9);
-  seg.setRadiusLimits(0.01, 0.08);
+  seg.setRadiusLimits(0.01, 1.50);
   seg.setInputCloud(cloud);
 
   PointIndices inliers;

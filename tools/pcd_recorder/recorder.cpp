@@ -5,16 +5,14 @@
 
 #include "recorder.hpp"
 
-#include <atomic>             // for std::atomic
-#include <chrono>             // for std::chrono_literals
-#include <condition_variable> // for std::condition_variable
-#include <future>             // for std::async, std::future, std::promise
-#include <iostream>           // for std::clog
-#include <memory>             // for std::unique_ptr
-#include <mutex>              // for std::mutex
-#include <thread>             // for std::this_thread::sleep_for
-#include <cassert>            // for assert
-#include <cstdio>             // for std::sprintf
+#include <atomic>
+#include <future>   // async, future
+#include <iostream> // clog
+#include <memory>   // unique_ptr, make_unique
+#include <cassert>
+#include <cstdio> // sprintf
+
+#include <jarvis/openni_grabber.hpp>
 
 #include <pcl/console/print.h>
 #include <pcl/io/openni_grabber.h>
@@ -25,6 +23,7 @@
 using pcl::console::print_info;
 using pcl::console::print_warn;
 using jarvis::pcd_recorder;
+using jarvis::openni_grabber;
 
 // ============================================
 // Openni Devices information functions
@@ -69,80 +68,6 @@ void jarvis::show_openni_device_info(const std::string &device_id) {
     print_info("%d = %dx%d @ %dfps\n", mode.first, mode.second.nYRes,
                mode.second.nXRes, mode.second.nFPS);
 }
-
-// ============================================
-// openni_grabber definitions
-// ============================================
-
-namespace {
-template <typename PointT>
-class openni_grabber {
-public:
-  using point_t = PointT;
-  using cloud_ptr = typename pcl::PointCloud<point_t>::ConstPtr;
-  using promise_t = std::promise<cloud_ptr>;
-
-public:
-  openni_grabber(const bool enable_dr) {
-    grabber = std::make_unique<pcl::OpenNIGrabber>();
-    config_depth_registration(enable_dr);
-    config_callback();
-    grabber->start();
-  }
-
-  ~openni_grabber() {
-    assert(grabber->isRunning());
-    grabber->stop();
-    // The sleep is a work around, since sometimes callbacks are called after
-    // stopping or destroying the grabber.
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(300ms);
-  }
-
-  void grab(cloud_ptr &cloud) {
-    assert(!output_cloud);
-    assert(grabber->isRunning());
-    std::unique_lock<std::mutex> lk(mtx);
-    output_cloud = &cloud;
-    cv.wait(lk, [&] { return output_cloud == nullptr; });
-    assert(!output_cloud);
-  }
-
-private:
-  void config_callback() {
-    boost::function<void(const cloud_ptr &)> callback;
-    callback = [&](const cloud_ptr &cloud) {
-      std::unique_lock<std::mutex> lk(mtx);
-      if (!output_cloud)
-        return;
-      *output_cloud = cloud;
-      output_cloud = nullptr;
-      lk.unlock();
-      cv.notify_one();
-    };
-    grabber->registerCallback(callback);
-  }
-
-  void config_depth_registration(bool enable_dr) {
-    if (!enable_dr)
-      return;
-    auto device = grabber->getDevice();
-    if (device->isDepthRegistrationSupported()) {
-      device->setDepthRegistration(true);
-      assert(device->isDepthRegistered());
-      std::clog << "Depth registration enabled.\n";
-    } else {
-      std::clog << "Error: Depth registration is not supported\n";
-    }
-  }
-
-private:
-  std::mutex mtx;
-  std::condition_variable cv;
-  cloud_ptr *output_cloud{nullptr};
-  std::unique_ptr<pcl::OpenNIGrabber> grabber;
-};
-} // end anonymous namespace
 
 // ============================================
 // pcd_recorder definitions
@@ -205,6 +130,7 @@ private:
         fc.stop();
         return nullptr;
       }
+
       cloud_ptr cloud;
       grabber.grab(cloud);
       if (!take_infinite_frames) {
