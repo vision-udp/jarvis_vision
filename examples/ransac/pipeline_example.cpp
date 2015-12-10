@@ -17,6 +17,12 @@
 #include <iostream>  // for clog, endl
 #include <vector>    // for vector
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <tuple>
+#include <map>
+
+
 using namespace jarvis;
 using pcl::PointXYZ;
 using pcl::PointXYZRGBA;
@@ -47,7 +53,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  using point_t = PointXYZ;
+  using point_t = PointXYZRGBA;
 
   try {
     const auto pcd_files = get_pcd_files(argv[1]);
@@ -74,6 +80,18 @@ int main(int argc, char *argv[]) {
         viewer.start();
       }
       const auto colored_cloud = pipeline.get_colored_cloud();
+      using tuple_t = std::tuple<int,int,int,int>;
+      std::map<tuple_t, size_t> hist;
+      for(auto& p : *colored_cloud) {
+        ++hist[tuple_t{p.b, p.g, p.r, p.a}];
+        p.a = 255;
+      }
+      for(const auto& pair : hist) {
+        int b,g,r,a;
+        std::tie(b,g,r,a) = pair.first;
+        size_t reps = pair.second;
+        std::clog << '(' << b << ", " << g << ", " << r << ", " << a << ") -> " << reps << std::endl;
+      }
       viewer.show_cloud(colored_cloud, "colored");
       viewer.spin_once();
     }

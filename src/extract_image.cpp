@@ -19,9 +19,9 @@ jarvis::extract_image(const pcl::PointCloud<pcl::PointXYZRGBA> &cloud) {
   auto *image_ptr = result.ptr();
   for (const auto &point : cloud) {
     const auto &rgb = point.getRGBVector3i();
-    (*image_ptr++) = static_cast<unsigned char>(rgb[0]);
-    (*image_ptr++) = static_cast<unsigned char>(rgb[1]);
     (*image_ptr++) = static_cast<unsigned char>(rgb[2]);
+    (*image_ptr++) = static_cast<unsigned char>(rgb[1]);
+    (*image_ptr++) = static_cast<unsigned char>(rgb[0]);
   }
 
   return result;
