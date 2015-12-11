@@ -25,16 +25,6 @@ using pcl::console::print_error;
 using cloud_t = pcl::PointCloud<PointXYZRGBA>;
 using cloud_ptr = boost::shared_ptr<cloud_t>;
 
-static void bgr2gray(const cv::Mat &src, cv::Mat &dst) {
-  for (int i = 0; i < src.rows; ++i) {
-    for (int j = 0; j < src.cols; ++j) {
-      auto bgr = src.at<cv::Vec3b>(i, j);
-      dst.at<uchar>(i, j) =
-          static_cast<uchar>(0.114 * bgr[0] + 0.587 * bgr[1] + 0.299 * bgr[2]);
-    }
-  }
-}
-
 static std::vector<fs::path> images_paths(const fs::path &input_path) {
   if (fs::is_regular_file(input_path))
     return std::vector<fs::path>({input_path});
@@ -50,8 +40,6 @@ static std::vector<fs::path> images_paths(const fs::path &input_path) {
   return frames_paths;
 }
 
-#define window_size 8
-
 static void transform_image(const fs::path &input_path, size_t spacing,
                             bool show) {
   cv::Mat image = cv::imread(input_path.c_str());
@@ -59,16 +47,23 @@ static void transform_image(const fs::path &input_path, size_t spacing,
   steady_timer timer;
 
   clog << "Image path: " << input_path << '\n';
-  clog << "dimensions: " << image.size() << '\n';
+  clog << "Dimensions: " << image.size() << '\n';
 
-  timer.run("GrayScale");
-  bgr2gray(image, image_gray);
+  timer.run("bgr2gray");
+  cv::cvtColor(image, image_gray, CV_BGR2GRAY);
   timer.finish();
-  cv::imshow("GrauScale", image_gray);
-  image_gray.convertTo(image_gray, CV_64FC1);
 
+  cv::imshow("GrayScale", image_gray);
+
+  timer.run("Convert to 64 bits");
+  image_gray.convertTo(image_gray, CV_64FC1);
+  timer.finish();
+
+  timer.run("transform image");
+  constexpr int window_size = 8;
   auto params = lu_transform<double, window_size>(
       image_gray, static_cast<ptrdiff_t>(window_size) / 2, spacing);
+  timer.finish();
 
   int rows = image_gray.rows;
   int cols = image_gray.cols;
@@ -83,8 +78,8 @@ static void transform_image(const fs::path &input_path, size_t spacing,
   cv::Scalar std_dev;
   cv::meanStdDev(result, mean, std_dev);
 
-  std::printf("mean: %f\nstd dev: %f\nratio: %f\n", mean.val[0], std_dev.val[0],
-              std_dev.val[0] / mean.val[0]);
+  std::printf("[ RESULT   ] mean: %f\n\tstd dev: %f\n\tratio: %f\n",
+              mean.val[0], std_dev.val[0], std_dev.val[0] / mean.val[0]);
 
   if (show) {
     auto result_size = image.size();

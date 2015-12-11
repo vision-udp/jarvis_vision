@@ -30,22 +30,11 @@ using cloud_ptr = boost::shared_ptr<cloud_t>;
 
 #define window_size 8
 
-static void bgr2gray(const cv::Mat &src, cv::Mat &dst) {
-  for (int i = 0; i < src.rows; ++i) {
-    for (int j = 0; j < src.cols; ++j) {
-      auto bgr = src.at<cv::Vec3b>(i, j);
-      dst.at<uchar>(i, j) =
-          static_cast<uchar>(0.114 * bgr[0] + 0.587 * bgr[1] + 0.299 * bgr[2]);
-    }
-  }
-}
-
 template <typename T>
 static std::vector<T> transform_image(const cv::Mat &image, size_t spacing) {
   cv::Mat image_gray(image.size(), CV_8UC1);
-  bgr2gray(image, image_gray);
+  cv::cvtColor(image, image_gray, CV_BGR2GRAY);
   image_gray.convertTo(image_gray, CV_64FC1);
-  // cv::GaussianBlur(image_gray, image_gray, {3, 3}, 1);
   return lu_transform<T, window_size>(
       image_gray, static_cast<ptrdiff_t>(window_size) / 2, spacing);
 }
@@ -78,12 +67,13 @@ int main(int argc, char *argv[]) {
   }
 
   steady_timer timer;
-  timer.run("extract image");
+  timer.run("Extract image");
   cv::Mat image = extract_image(*cloud);
   timer.finish();
 
-  timer.run("transform image");
-  auto params = transform_image<double>(image, window_size / 2);
+  timer.run("Transform image");
+  const size_t spacing = 8;
+  auto params = transform_image<double>(image, spacing);
   timer.finish();
 
   std::vector<int> mapping;
@@ -111,15 +101,17 @@ int main(int argc, char *argv[]) {
   cv::Vec3b color;
   for (size_t i = 0; i < clusters.size(); ++i) {
     const std::vector<int> &indices = clusters[i].indices;
+
     if (indices.empty())
       continue;
+
     double sum = 0;
     for (const auto idx : indices)
       sum += params[2 * static_cast<size_t>(idx) / window_size];
 
     double mean = sum / indices.size();
 
-    std::cout << mean << '\n';
+    std::cout << "Cluster " << i << " mean: " << mean << '\n';
     if (mean < 0.005)
       color = cv::Vec3b(255, 0, 0);
     else if (mean > 1.0)
