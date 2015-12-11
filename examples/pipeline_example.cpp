@@ -6,8 +6,8 @@
 #include <jarvis/cloud_io.hpp>
 #include <jarvis/cloud_pipeline.hpp>
 #include <jarvis/pcl_fwd.hpp>
-#include <jarvis/steady_timer.hpp>
 #include <jarvis/simple_visualizer.hpp>
+#include <jarvis/steady_timer.hpp>
 
 #include <boost/filesystem.hpp> // for path, recursive_iterator
 
@@ -20,7 +20,6 @@
 using namespace jarvis;
 using pcl::PointXYZ;
 using pcl::PointXYZRGBA;
-using std::clog;
 namespace fs = boost::filesystem;
 
 static std::vector<fs::path> get_pcd_files(const fs::path &input_path) {
@@ -43,15 +42,15 @@ static std::vector<fs::path> get_pcd_files(const fs::path &input_path) {
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
-    clog << "Usage: " << argv[0] << " <input>\n";
+    std::clog << "Usage: " << argv[0] << " <input>\n";
     return 1;
   }
 
-  using point_t = PointXYZ;
+  using point_t = PointXYZRGBA;
 
   try {
     const auto pcd_files = get_pcd_files(argv[1]);
-    clog << pcd_files.size() << " PCD files to be processed.\n";
+    std::clog << pcd_files.size() << " PCD files to be processed.\n";
     const bool is_regular_file = fs::is_regular_file(argv[1]);
     simple_visualizer<PointXYZRGBA> viewer;
     viewer.set_full_screen(true);
@@ -61,15 +60,17 @@ int main(int argc, char *argv[]) {
       const auto cloud = load_cloud<point_t>(path.string());
       steady_timer timer;
       cloud_pipeline<point_t> pipeline;
+
       timer.run("Processing frame");
       pipeline.process(cloud);
       const auto elapsed = timer.finish();
-      clog << "Frame computations done!\n";
       const std::chrono::duration<double> elapsed_secs(elapsed);
       const double estimated_fps = 1.0 / elapsed_secs.count();
-      clog << "Estimated frame rate: " << estimated_fps << " fps\n";
+      std::clog << "Frame computations done!\n";
+      std::clog << "Estimated frame rate: " << estimated_fps << " fps\n";
+
       if (is_regular_file) {
-        clog << "Press enter to visualize . . ." << std::endl;
+        std::clog << "Press enter to visualize . . ." << std::endl;
         std::cin.get();
         viewer.start();
       }
@@ -80,9 +81,9 @@ int main(int argc, char *argv[]) {
     viewer.spin();
     return 0;
   } catch (std::exception &ex) {
-    clog << "Error: " << ex.what() << '\n';
+    std::clog << "Error: " << ex.what() << '\n';
   } catch (...) {
-    clog << "Unexpected exception.\n";
+    std::clog << "Unexpected exception.\n";
   }
   return 1;
 }

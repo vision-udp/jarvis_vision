@@ -5,18 +5,21 @@
 
 #include <jarvis/classification.hpp>
 
+#include <jarvis/any_map.hpp>
 #include <jarvis/model_recognition.hpp>
 
 #include <pcl/ModelCoefficients.h>
-#include <pcl/point_cloud.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/point_cloud.h>
 #include <pcl/search/kdtree.h>
 
 #include <boost/algorithm/clamp.hpp>
-#include <boost/range/algorithm/max_element.hpp>
 #include <boost/make_shared.hpp>
+#include <boost/range/algorithm/max_element.hpp>
 
 #include <array>
+#include <string>
+
 #include <cstddef> // for std::size_t
 
 // ==========================================
@@ -47,7 +50,7 @@ class classifier_impl {
   using search_ptr = shared_ptr<search_t>;
 
 public:
-  object_info classify(const cloud_const_ptr &input_cloud);
+  any_map classify(const cloud_const_ptr &input_cloud);
 
 private:
   void make_search_method() {
@@ -75,8 +78,7 @@ private:
 } // end anonymous namespace
 
 template <typename PointT>
-object_info
-classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
+any_map classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
   cloud = input_cloud;
   make_search_method();
   make_normals();
@@ -85,7 +87,7 @@ classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
   mr.set_input_cloud(cloud);
   mr.set_input_normals(normals);
 
-  object_info res{};
+  any_map res;
   ModelCoefficients cyl_coeffs, sphere_coeffs;
 
   // Test cylinder
@@ -102,27 +104,30 @@ classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
   const auto selected =
       static_cast<size_t>(boost::max_element(prob) - prob.begin());
 
-  if (prob[selected] < 0.5)
+  if (prob[selected] < 0.5) {
+    res["shape"] = std::string("unknown");
     return res;
+  }
 
-  res.probability = prob[selected];
+  res["probability"] = prob[selected];
 
   switch (selected) {
   case cyl_id:
-    res.type = object_type::cylinder;
+    res["shape"] = std::string("cylinder");
     assert(coeffs[cyl_id].values.size() == 7);
-    res.radius = coeffs[cyl_id].values.back();
+    res["radius"] = coeffs[cyl_id].values.back();
     break;
   case sphere_id:
-    res.type = object_type::sphere;
+    res["shape"] = std::string("sphere");
     assert(coeffs[sphere_id].values.size() == 4);
-    res.radius = coeffs[sphere_id].values.back();
+    res["radius"] = coeffs[sphere_id].values.back();
     break;
   case cube_id:
-    res.type = object_type::cube;
+    res["shape"] = std::string("cuboid");
     break;
   }
 
+  assert(res.at("shape").type() == typeid(std::string));
   return res;
 }
 
@@ -131,7 +136,7 @@ classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
 // ==========================================
 
 template <typename PointT>
-object_info
+any_map
 jarvis::classify_object(const shared_ptr<const PointCloud<PointT>> &cloud) {
   classifier_impl<PointT> classifier;
   return classifier.classify(cloud);
@@ -143,8 +148,8 @@ jarvis::classify_object(const shared_ptr<const PointCloud<PointT>> &cloud) {
 
 #include <pcl/point_types.h> // for PointXYZ, PointXYZRGBA
 
-template object_info jarvis::classify_object(
+template any_map jarvis::classify_object(
     const shared_ptr<const PointCloud<pcl::PointXYZ>> &cloud);
 
-template object_info jarvis::classify_object(
+template any_map jarvis::classify_object(
     const shared_ptr<const PointCloud<pcl::PointXYZRGBA>> &cloud);

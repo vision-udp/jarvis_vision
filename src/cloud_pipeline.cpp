@@ -5,16 +5,16 @@
 
 #include <jarvis/cloud_pipeline.hpp>
 
-#include <jarvis/colorize.hpp>
 #include <jarvis/classification.hpp>
+#include <jarvis/colorize.hpp>
 #include <jarvis/filtering.hpp>
 #include <jarvis/plane_extraction.hpp>
 #include <jarvis/steady_timer.hpp>
 
 #include <boost/make_shared.hpp>
+#include <cstdint>  // for uint8_t
 #include <iostream> // for clog
 #include <vector>
-#include <cstdint> // for uint8_t
 
 #include <pcl/point_types.h> // for PointXYZ, PointRGBA
 #include <pcl/search/kdtree.h>
@@ -33,8 +33,29 @@ using pcl::PointIndices;
 using pcl::PointXYZRGBA;
 using std::size_t;
 using std::uint8_t;
-using std::clog;
-using std::endl;
+
+// ==========================================
+// Auxiliary
+// ==========================================
+
+// template <typename T>
+// static void print_as(const boost::any &any, std::ostream &os) {
+//  os << boost::any_cast<const T &>(any);
+//}
+//
+// static void print_any(const boost::any &any, std::ostream &os) {
+//  const auto &type = any.type();
+//  if (type == typeid(std::string))
+//    print_as<std::string>(any, os);
+//  else if (type == typeid(const char *))
+//    print_as<const char *>(any, os);
+//  else if (type == typeid(float))
+//    print_as<float>(any, os);
+//  else if (type == typeid(double))
+//    print_as<double>(any, os);
+//  else
+//    os << "UNPRINTABLE";
+//}
 
 // ==========================================
 // cloud_pipeline_impl
@@ -51,26 +72,28 @@ public:
   }
 
   void run() {
-    timer.run("Applying filters");
+    using std::clog;
+    using std::endl;
+    // timer.run("Applying filters");
     apply_filters();
-    timer.finish();
+    // timer.finish();
     clog << "Original cloud size: " << original_cloud->size() << '\n';
     clog << "Filtered cloud size: " << cloud->size() << '\n';
 
-    timer.run("Extracting planes");
+    // timer.run("Extracting planes");
     extract_planes();
-    timer.finish();
-    clog << "Number of found planes: ";
+    // timer.finish();
+    // clog << "Number of found planes: ";
     clog << plane_extractor.get_num_planes() << '\n';
     clog << "Number of remaining points: ";
     clog << plane_extractor.get_remaining_indices()->indices.size() << '\n';
 
-    timer.run("Clustering");
+    timer.run("clustering");
     clusterize();
     timer.finish();
     clog << "Number of found clusters: " << clusters.size() << endl;
 
-    timer.run("Processing clusters");
+    timer.run("classifying");
     classify_clusters();
     timer.finish();
   }
@@ -81,13 +104,13 @@ private:
   void apply_filters() {
     cloud_filter<PointT> filter;
     filter.set_input_cloud(original_cloud);
-    filter.set_leaf_size(0.005f);
+    filter.set_desired_num_of_points(50000);
     cloud = filter.filter_input_cloud();
   }
 
   void extract_planes() {
     plane_extractor.set_input_cloud(cloud);
-    plane_extractor.set_min_points(10000);
+    plane_extractor.set_min_points(3500);
     plane_extractor.extract_planes();
   }
 
@@ -97,9 +120,9 @@ private:
 
     const auto remaining = plane_extractor.get_remaining_indices();
     pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setClusterTolerance(0.02);
+    ec.setClusterTolerance(0.03);
     ec.setMinClusterSize(100);
-    ec.setMaxClusterSize(10000);
+    ec.setMaxClusterSize(3500);
     ec.setSearchMethod(search);
     ec.setInputCloud(cloud);
     ec.setIndices(remaining);
@@ -118,66 +141,61 @@ private:
 private:
   mutable steady_timer timer;
   shared_ptr<const cloud_t> original_cloud;
-  shared_ptr<cloud_t> cloud;
+  shared_ptr<const cloud_t> cloud;
   plane_extractor<PointT> plane_extractor;
   std::vector<PointIndices> clusters;
-  std::vector<object_info> clusters_info;
+  std::vector<any_map> clusters_info;
 };
 } // end anonymous namespace
 
 template <typename PointT>
 shared_ptr<PointCloud<PointXYZRGBA>>
 cloud_pipeline_impl<PointT>::make_colored_cloud() const {
-  timer.run("Creating colored cloud");
   const rgba_color red{255, 0, 0};
+  return jarvis::make_colored_cloud(*cloud, red);
+}
+
+template <>
+shared_ptr<PointCloud<PointXYZRGBA>>
+cloud_pipeline_impl<PointXYZRGBA>::make_colored_cloud() const {
+  using std::clog;
+  using std::endl;
+  timer.run("Creating colored cloud");
   const rgba_color green{0, 255, 0};
   const rgba_color cyan{0, 255, 255};
   const rgba_color magenta{255, 0, 255};
+  const rgba_color yellow{128, 128, 0};
+  std::map<std::string, rgba_color> color_map;
+  color_map["cylinder"] = green;
+  color_map["sphere"] = cyan;
+  color_map["cuboid"] = magenta;
 
-  const auto colored_cloud = jarvis::make_colored_cloud(*cloud, red);
+  const auto colored_cloud = make_shared<cloud_t>(*cloud);
 
-  const size_t num_planes = plane_extractor.get_num_planes();
-  for (size_t i = 0; i < num_planes; ++i) {
-    const auto &inliers = plane_extractor.get_inliers(i);
-    const auto blue_scale =
-        static_cast<double>(inliers.indices.size()) / cloud->size();
-    const auto blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
-    colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
-  }
+  // No plane coloring:
+  //  const size_t num_planes = plane_extractor.get_num_planes();
+  //  for (size_t i = 0; i < num_planes; ++i) {
+  //    const auto &inliers = plane_extractor.get_inliers(i);
+  //    const auto blue_scale =
+  //        static_cast<double>(inliers.indices.size()) / cloud->size();
+  //    const auto blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
+  //    colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
+  //  }
 
   for (size_t i = 0; i < clusters.size(); ++i) {
-    clog << "Cluster " << i + 1 << ": ";
-    clog << "Size=" << clusters[i].indices.size();
-    const object_info info = clusters_info[i];
-    rgba_color object_color{};
+    //    clog << "Cluster " << i + 1 << ": ";
+    //    clog << "Size=" << clusters[i].indices.size();
+    const any_map &info = clusters_info[i];
 
-    switch (info.type) {
-    case object_type::cylinder:
-      object_color = green;
-      clog << ", type=cylinder, radius=" << info.radius * 100 << "cm";
-      break;
+    //    for (const auto &elem : info) {
+    //      clog << ", " << elem.first << '=';
+    //      print_any(elem.second, clog);
+    //    }
+    //    clog << endl;
 
-    case object_type::sphere:
-      object_color = cyan;
-      clog << ", type=sphere, radius=" << info.radius * 100 << "cm";
-      break;
-
-    case object_type::cube:
-      object_color = magenta;
-      clog << ", type=cube";
-      break;
-
-    case object_type::unknown:
-      object_color = rgba_color(128, 128, 0);
-      clog << ", type=unknown";
-      break;
-    }
-
-    if (info.type != object_type::unknown)
-      clog << ", probability=" << 100.0 * info.probability << "%";
-
-    clog << std::endl;
-    colorize(*colored_cloud, clusters[i], object_color);
+    const auto &shape = info.get<std::string>("shape");
+    if (shape != "unknown")
+      colorize(*colored_cloud, clusters[i], color_map.at(shape));
   }
   clog << endl;
 

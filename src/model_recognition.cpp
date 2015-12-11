@@ -6,18 +6,19 @@
 #include <jarvis/model_recognition.hpp>
 
 #include <boost/make_shared.hpp>
-#include <boost/range/algorithm_ext/iota.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
+#include <boost/range/algorithm_ext/iota.hpp>
 
 #include <pcl/ModelCoefficients.h>
 #include <pcl/PointIndices.h>
 #include <pcl/point_cloud.h>
+
+#include <pcl/filters/filter.h> // for removeNaNFromPointCloud
 #include <pcl/segmentation/sac_segmentation.h>
 
 #include <cmath>    // for std::fabs
 #include <iterator> // for std::back_inserter
 #include <utility>  // for std::swap
-#include <iostream> // for std::clog
 
 // ==========================================
 // Global namespace visibility
@@ -31,8 +32,6 @@ using pcl::PointCloud;
 using pcl::SACSegmentation;
 using pcl::SACSegmentationFromNormals;
 using Eigen::Vector3f;
-using std::clog;
-using std::endl;
 
 // ==========================================
 // Auxiliary functions
@@ -64,7 +63,7 @@ model_recognition<PointT, PointNT>::test_cylinder(ModelCoefficients &coeffs) {
 
   seg.setModelType(pcl::SACMODEL_CYLINDER);
   seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setRadiusLimits(0.01, 1.50);
+  seg.setRadiusLimits(0.01, 0.15);
   seg.setDistanceThreshold(0.04);
   seg.setNormalDistanceWeight(0.1);
 
@@ -94,7 +93,7 @@ model_recognition<PointT, PointNT>::test_sphere(ModelCoefficients &coeffs) {
   seg.setMaxIterations(50);
   seg.setDistanceThreshold(0.005);
   seg.setProbability(0.9);
-  seg.setRadiusLimits(0.01, 1.50);
+  seg.setRadiusLimits(0.01, 0.10);
   seg.setInputCloud(cloud);
 
   PointIndices inliers;

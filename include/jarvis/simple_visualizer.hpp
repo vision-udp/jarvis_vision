@@ -6,9 +6,9 @@
 #ifndef JARVIS_SIMPLE_VISUALIZER_HPP
 #define JARVIS_SIMPLE_VISUALIZER_HPP
 
-#include <string>               // For std::string
-#include <memory>               // For std::unique_ptr
 #include <boost/shared_ptr.hpp> // For boost::shared_ptr
+#include <memory>               // For std::unique_ptr
+#include <string>               // For std::string
 
 namespace pcl {
 template <typename T>
@@ -24,7 +24,7 @@ template <typename PointT>
 class simple_visualizer {
   using point_t = PointT;
   using cloud_t = pcl::PointCloud<PointT>;
-  using cloud_ptr = boost::shared_ptr<cloud_t>;
+  using cloud_ptr = boost::shared_ptr<const cloud_t>;
   using viewer_t = pcl::visualization::PCLVisualizer;
 
 public:

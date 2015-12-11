@@ -6,20 +6,19 @@
 #include "recorder.hpp"
 
 #include <atomic>    // for std::atomic
+#include <cassert>   // for assert
 #include <chrono>    // for std::chrono_literals
+#include <csignal>   // for std::signal
+#include <cstdlib>   // for EXIT_SUCESS, EXIT_FAILURE
 #include <exception> // for std::exception
 #include <iostream>  // for std::clog, std::cin
 #include <string>    // for std::string
-#include <cassert>   // for assert
-#include <csignal>   // for std::signal
-#include <cstdlib>   // for EXIT_SUCESS, EXIT_FAILURE
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
-using std::clog;
 using jarvis::pcd_recorder;
 
 namespace {
@@ -77,9 +76,9 @@ static std::string read_line() {
 }
 
 static void list_point_types() {
-  clog << "The available point types are:\n";
-  clog << "xyz:     for no color points.\n";
-  clog << "xyzrgba: for colored points.\n";
+  std::clog << "The available point types are:\n";
+  std::clog << "xyz:     for no color points.\n";
+  std::clog << "xyzrgba: for colored points.\n";
 }
 
 static bool create_dirs(const fs::path &path) {
@@ -87,40 +86,40 @@ static bool create_dirs(const fs::path &path) {
     return false;
   if (fs::exists(path)) {
     if (!fs::is_directory(path)) {
-      clog << "Error, file exists: " << path << '\n';
+      std::clog << "Error, file exists: " << path << '\n';
       return false;
     }
-    clog << "Directory already exists. Some files could be overwritten "
-            "by the generated pcd files.\n";
+    std::clog << "Directory already exists. Some files could be overwritten "
+                 "by the generated pcd files.\n";
 
     while (true) {
-      clog << "Continue? [y, N] " << std::flush;
+      std::clog << "Continue? [y, N] " << std::flush;
       const std::string ans = read_line();
       if (ans == "y" || ans == "Y") {
-        clog << "Ok, the existing directory will be used." << std::endl;
+        std::clog << "Ok, the existing directory will be used." << std::endl;
         return true;
       }
       if (ans.empty() || ans == "n" || ans == "N") {
-        clog << "Ok, program aborted." << std::endl;
+        std::clog << "Ok, program aborted." << std::endl;
         return false;
       }
-      clog << "Invalid answer. Respond 'y' or 'n'.\n";
+      std::clog << "Invalid answer. Respond 'y' or 'n'.\n";
     }
   }
   // If path does not exist...
   fs::path root = fs::absolute(path.parent_path());
   while (!fs::exists(root)) {
     root = root.parent_path();
-    clog << root << std::endl;
+    std::clog << root << std::endl;
   }
   if (!fs::is_directory(root)) {
-    clog << "Error: " << root << " is not a directory." << std::endl;
+    std::clog << "Error: " << root << " is not a directory." << std::endl;
     return false;
   }
 
   const bool ret_val = fs::create_directories(path); // Should return true
   if (ret_val)
-    clog << "Directory " << path << " has been created." << std::endl;
+    std::clog << "Directory " << path << " has been created." << std::endl;
   return ret_val;
 }
 
@@ -131,12 +130,12 @@ static void run_recorder(const pcd_recorder::param_type &params,
   const auto prev_cd = fs::current_path();
   fs::current_path(output_dir);
 
-  clog << "Creating recorder . . . " << std::endl;
+  std::clog << "Creating recorder . . . " << std::endl;
   auto recorder = pcd_recorder::make(params);
 
-  clog << "Starting recorder" << std::endl;
+  std::clog << "Starting recorder" << std::endl;
   recorder->start();
-  clog << "The recorder is running!\n";
+  std::clog << "The recorder is running!\n";
 
   static std::atomic<bool> signaled{false};
   std::signal(SIGINT, [](int) { signaled = true; });
@@ -145,7 +144,7 @@ static void run_recorder(const pcd_recorder::param_type &params,
   while (!recorder->wait_for(500ms)) {
     if (!signaled)
       continue;
-    clog << "\nStopping recorder . . . " << std::endl;
+    std::clog << "\nStopping recorder . . . " << std::endl;
     recorder->stop();
     recorder->wait();
     break;
@@ -153,7 +152,7 @@ static void run_recorder(const pcd_recorder::param_type &params,
 
   recorder.reset(); // Destroy recorder before logging.
   fs::current_path(prev_cd);
-  clog << "All done!" << std::endl;
+  std::clog << "All done!" << std::endl;
 }
 
 static int run_main_program(int argc, char *argv[]) {
@@ -164,7 +163,7 @@ static int run_main_program(int argc, char *argv[]) {
   po::notify(vm);
 
   if (vm.count("help")) {
-    opts.print_usage(clog);
+    opts.print_usage(std::clog);
     return EXIT_SUCCESS;
   }
 
@@ -185,8 +184,8 @@ static int run_main_program(int argc, char *argv[]) {
   }
 
   if (!vm.count("output-directory")) {
-    clog << "Error: Output directory is missing.\n";
-    opts.print_usage(clog);
+    std::clog << "Error: Output directory is missing.\n";
+    opts.print_usage(std::clog);
     return EXIT_FAILURE;
   }
 
@@ -209,9 +208,9 @@ int main(int argc, char *argv[]) {
       return 0; // EXIT_SUCESS is not required to be zero.
     return ret_val;
   } catch (std::exception &ex) {
-    clog << "Error: " << ex.what() << '\n';
+    std::clog << "Error: " << ex.what() << '\n';
   } catch (...) {
-    clog << "Unexpected error!\n";
+    std::clog << "Unexpected error!\n";
   }
   return EXIT_FAILURE;
 }
