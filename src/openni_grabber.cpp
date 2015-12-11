@@ -8,10 +8,10 @@
 #include <pcl/io/openni_grabber.h>
 
 #include <boost/function.hpp>
+#include <cassert>
 #include <chrono>
 #include <iostream> // std::clog, std::endl
 #include <thread>   // this_thread::sleep_for
-#include <cassert>
 
 // ==========================================
 // Global namespace visibility

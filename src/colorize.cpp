@@ -5,12 +5,12 @@
 
 #include <jarvis/colorize.hpp>
 
-#include <type_traits> // for is_pod
 #include <boost/make_shared.hpp>
+#include <type_traits> // for is_pod
 
+#include <pcl/PointIndices.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h> // for PointXYZ, PointXYZRGBA
-#include <pcl/PointIndices.h>
 
 using boost::make_shared;
 using boost::shared_ptr;

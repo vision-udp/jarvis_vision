@@ -9,6 +9,8 @@
 #include <boost/shared_ptr.hpp>
 #include <jarvis/pcl_fwd.hpp>
 
+#include <cstddef>
+
 namespace jarvis {
 
 template <typename PointT>
@@ -23,14 +25,15 @@ public:
     cloud = input_cloud;
   }
 
-  /// \brief Sets the leaf size of x, y and z
-  void set_leaf_size(float value) { leaf_size = value; }
+  void set_desired_num_of_points(std::size_t value) {
+    desired_num_of_points = value;
+  }
 
   cloud_ptr filter_input_cloud();
 
 private:
   cloud_const_ptr cloud;
-  float leaf_size{};
+  std::size_t desired_num_of_points = 150000;
 };
 
 } // end namespace jarvis

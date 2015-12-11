@@ -6,22 +6,15 @@
 #ifndef JARVIS_CLASSIFICATION_HPP
 #define JARVIS_CLASSIFICATION_HPP
 
+#include <jarvis/any_map.hpp>
 #include <jarvis/pcl_fwd.hpp>
 
 #include <boost/shared_ptr.hpp>
 
 namespace jarvis {
 
-enum class object_type { unknown, cylinder, sphere, cube };
-
-struct object_info {
-  object_type type;
-  double probability;
-  double radius; // Only meaningful for objects with radius
-};
-
 template <typename PointT>
-object_info
+any_map
 classify_object(const boost::shared_ptr<const pcl::PointCloud<PointT>> &cloud);
 
 } // end namespace jarvis
