@@ -7,6 +7,9 @@
 
 #include <pcl/io/openni_grabber.h>
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 #include <boost/function.hpp>
 #include <cassert>
 #include <chrono>
@@ -53,6 +56,15 @@ void openni_grabber<PointT>::grab(cloud_const_ptr &cloud) {
 }
 
 template <typename PointT>
+void openni_grabber<PointT>::grab_x_inverted(cloud_t &cloud) {
+  cloud_const_ptr cloud1;
+  this->grab(cloud1);
+  cloud = *cloud1;
+  for (auto &p : cloud)
+    p.x = -p.x;
+}
+
+template <typename PointT>
 void openni_grabber<PointT>::config_callback() {
   boost::function<void(const cloud_const_ptr &)> callback;
   callback = [this](const cloud_const_ptr &cloud) {
@@ -84,8 +96,6 @@ void openni_grabber<PointT>::config_depth_registration(bool enable_dr) {
 // ==========================================
 // Template instantations
 // ==========================================
-
-#include <pcl/point_types.h>
 
 template class jarvis::openni_grabber<pcl::PointXYZ>;
 template class jarvis::openni_grabber<pcl::PointXYZRGBA>;

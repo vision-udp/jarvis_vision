@@ -37,6 +37,11 @@ public:
   void spin_once();
   void spin();
   void show_cloud(const cloud_ptr &cloud, const std::string &id = "cloud");
+  void remove_all_point_clouds();
+
+  void add_text_3d(const std::string &text, const PointT pos,
+                   const std::string &id);
+  void remove_text_3d(const std::string &id);
 
 private:
   bool full_screen{};

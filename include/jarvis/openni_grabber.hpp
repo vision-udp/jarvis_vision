@@ -31,6 +31,8 @@ public:
   ~openni_grabber();
   void grab(cloud_const_ptr &);
 
+  void grab_x_inverted(cloud_t &cloud);
+
 private:
   void config_callback();
   void config_depth_registration(bool);

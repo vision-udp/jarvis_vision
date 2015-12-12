@@ -6,11 +6,13 @@
 #include <jarvis/classification.hpp>
 
 #include <jarvis/any_map.hpp>
+#include <jarvis/colorize.hpp>
 #include <jarvis/model_recognition.hpp>
 
 #include <pcl/ModelCoefficients.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/point_cloud.h>
+#include <pcl/point_types.h> // for PointXYZRGBA
 #include <pcl/search/kdtree.h>
 
 #include <boost/algorithm/clamp.hpp>
@@ -32,6 +34,7 @@ using boost::shared_ptr;
 using pcl::ModelCoefficients;
 using pcl::PointCloud;
 using pcl::Normal;
+using pcl::PointXYZRGBA;
 using std::size_t;
 
 // ==========================================
@@ -70,12 +73,67 @@ private:
     ne.compute(*normals);
   }
 
+  std::string named_avg_color() const;
+
 private:
   cloud_const_ptr cloud;
   search_ptr search;
   normals_ptr normals;
 };
 } // end anonymous namespace
+
+template <typename PointT>
+std::string classifier_impl<PointT>::named_avg_color() const {
+  return "No color information";
+}
+
+template <>
+std::string classifier_impl<PointXYZRGBA>::named_avg_color() const {
+  unsigned long rsum{}, gsum{}, bsum{};
+  for (const auto &p : *cloud) {
+    rsum += p.r;
+    gsum += p.g;
+    bsum += p.b;
+  }
+  rgba_color avg_color{static_cast<uint8_t>(rsum / cloud->size()),
+                       static_cast<uint8_t>(gsum / cloud->size()),
+                       static_cast<uint8_t>(bsum / cloud->size())};
+
+  // FIXME: The following approach was a quick solution to guess the color of
+  // an object, use HSV based approach instead.
+
+  using pair_t = std::pair<rgba_color, std::string>;
+  std::vector<pair_t> pairs{{rgba_color(0, 0, 0), "black"},
+                            {rgba_color(255, 255, 255), "white"},
+                            {rgba_color(128, 0, 0), "red"},
+                            {rgba_color{0, 128, 0}, "green"},
+                            {rgba_color{0, 0, 128}, "blue"},
+                            {rgba_color(255, 0, 0), "light-red"},
+                            {rgba_color{0, 255, 0}, "light-green"},
+                            {rgba_color{0, 0, 255}, "light-blue"},
+                            {rgba_color{255, 255, 0}, "light-yellow"},
+                            {rgba_color(128, 128, 0), "yellow"},
+                            {rgba_color{0, 255, 255}, "cyan"},
+                            {rgba_color(255, 0, 255), "magenta"},
+                            {rgba_color{192, 192, 192}, "silver"},
+                            {rgba_color(128, 128, 128), "gray"},
+                            {rgba_color{128, 0, 128}, "purple"},
+                            {rgba_color(0, 128, 128), "teal"}};
+
+  auto get_dist2 = [avg_color](const rgba_color color) {
+    int r_diff = int(color.r) - int(avg_color.r);
+    int g_diff = int(color.g) - int(avg_color.g);
+    int b_diff = int(color.b) - int(avg_color.b);
+    return r_diff * r_diff + g_diff * g_diff + b_diff * b_diff;
+  };
+
+  auto near = [get_dist2](const pair_t &lhs, const pair_t &rhs) {
+    return get_dist2(lhs.first) < get_dist2(rhs.first);
+  };
+
+  auto it = std::min_element(pairs.begin(), pairs.end(), near);
+  return it->second;
+}
 
 template <typename PointT>
 any_map classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
@@ -110,6 +168,7 @@ any_map classifier_impl<PointT>::classify(const cloud_const_ptr &input_cloud) {
   }
 
   res["probability"] = prob[selected];
+  res["color"] = named_avg_color();
 
   switch (selected) {
   case cyl_id:

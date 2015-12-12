@@ -6,8 +6,10 @@
 #ifndef JARVIS_CLOUD_PIPELINE_HPP
 #define JARVIS_CLOUD_PIPELINE_HPP
 
-#include <jarvis/pcl_fwd.hpp>
 #include <boost/shared_ptr.hpp>
+#include <jarvis/pcl_fwd.hpp>
+#include <jarvis/simple_visualizer.hpp>
+#include <pcl/PointIndices.h>
 
 namespace jarvis {
 
@@ -19,10 +21,32 @@ public:
 
 public:
   void process(const cloud_const_ptr &input_cloud);
-  auto get_colored_cloud() const { return colored_cloud; }
+
+  cloud_const_ptr get_filtered_cloud() const { return filtered_cloud; }
+  const std::vector<pcl::PointIndices> &get_clusters() { return clusters; }
 
 private:
-  boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>> colored_cloud;
+  cloud_const_ptr filtered_cloud;
+  std::vector<pcl::PointIndices> clusters;
+};
+
+template <typename PointT>
+class pipeline_searcher {
+  using cloud_t = pcl::PointCloud<PointT>;
+  using cloud_const_ptr = boost::shared_ptr<const cloud_t>;
+
+public:
+  pipeline_searcher(bool full_screen) { vis.set_full_screen(full_screen); }
+  void start() { vis.start(); }
+  void stop() { vis.stop(); }
+  void spin_once() { vis.spin_once(); }
+  void spin() { vis.spin(); }
+
+  void update_cloud(cloud_const_ptr cloud);
+
+private:
+  simple_visualizer<PointT> vis;
+  size_t last_num_of_clusters{};
 };
 
 } // end namespace jarvis
