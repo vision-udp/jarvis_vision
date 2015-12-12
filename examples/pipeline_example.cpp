@@ -51,34 +51,22 @@ int main(int argc, char *argv[]) {
   try {
     const auto pcd_files = get_pcd_files(argv[1]);
     std::clog << pcd_files.size() << " PCD files to be processed.\n";
-    const bool is_regular_file = fs::is_regular_file(argv[1]);
-    simple_visualizer<PointXYZRGBA> viewer;
-    viewer.set_full_screen(true);
-    if (!is_regular_file)
-      viewer.start();
+    pipeline_searcher<PointXYZRGBA> searcher(true);
+    searcher.start();
     for (const auto &path : pcd_files) {
       const auto cloud = load_cloud<point_t>(path.string());
       steady_timer timer;
-      cloud_pipeline<point_t> pipeline;
 
       timer.run("Processing frame");
-      pipeline.process(cloud);
+      searcher.update_cloud(cloud);
       const auto elapsed = timer.finish();
       const std::chrono::duration<double> elapsed_secs(elapsed);
       const double estimated_fps = 1.0 / elapsed_secs.count();
       std::clog << "Frame computations done!\n";
       std::clog << "Estimated frame rate: " << estimated_fps << " fps\n";
-
-      if (is_regular_file) {
-        std::clog << "Press enter to visualize . . ." << std::endl;
-        std::cin.get();
-        viewer.start();
-      }
-      const auto colored_cloud = pipeline.get_colored_cloud();
-      viewer.show_cloud(colored_cloud, "colored");
-      viewer.spin_once();
+      searcher.spin_once();
     }
-    viewer.spin();
+    searcher.spin();
     return 0;
   } catch (std::exception &ex) {
     std::clog << "Error: " << ex.what() << '\n';

@@ -14,6 +14,7 @@
 #include <boost/make_shared.hpp>
 #include <cstdint>  // for uint8_t
 #include <iostream> // for clog
+#include <sstream>
 #include <vector>
 
 #include <pcl/point_types.h> // for PointXYZ, PointRGBA
@@ -38,24 +39,24 @@ using std::uint8_t;
 // Auxiliary
 // ==========================================
 
-// template <typename T>
-// static void print_as(const boost::any &any, std::ostream &os) {
-//  os << boost::any_cast<const T &>(any);
-//}
-//
-// static void print_any(const boost::any &any, std::ostream &os) {
-//  const auto &type = any.type();
-//  if (type == typeid(std::string))
-//    print_as<std::string>(any, os);
-//  else if (type == typeid(const char *))
-//    print_as<const char *>(any, os);
-//  else if (type == typeid(float))
-//    print_as<float>(any, os);
-//  else if (type == typeid(double))
-//    print_as<double>(any, os);
-//  else
-//    os << "UNPRINTABLE";
-//}
+template <typename T>
+static void print_as(const boost::any &any, std::ostream &os) {
+  os << boost::any_cast<const T &>(any);
+}
+
+static void print_any(const boost::any &any, std::ostream &os) {
+  const auto &type = any.type();
+  if (type == typeid(std::string))
+    print_as<std::string>(any, os);
+  else if (type == typeid(const char *))
+    print_as<const char *>(any, os);
+  else if (type == typeid(float))
+    print_as<float>(any, os);
+  else if (type == typeid(double))
+    print_as<double>(any, os);
+  else
+    os << "UNPRINTABLE";
+}
 
 // ==========================================
 // cloud_pipeline_impl
@@ -74,16 +75,16 @@ public:
   void run() {
     using std::clog;
     using std::endl;
-    // timer.run("Applying filters");
+    timer.run("Applying filters");
     apply_filters();
-    // timer.finish();
+    timer.finish();
     clog << "Original cloud size: " << original_cloud->size() << '\n';
     clog << "Filtered cloud size: " << cloud->size() << '\n';
 
-    // timer.run("Extracting planes");
+    timer.run("Extracting planes");
     extract_planes();
-    // timer.finish();
-    // clog << "Number of found planes: ";
+    timer.finish();
+    clog << "Number of found planes: ";
     clog << plane_extractor.get_num_planes() << '\n';
     clog << "Number of remaining points: ";
     clog << plane_extractor.get_remaining_indices()->indices.size() << '\n';
@@ -98,7 +99,13 @@ public:
     timer.finish();
   }
 
-  shared_ptr<PointCloud<PointXYZRGBA>> make_colored_cloud() const;
+  // shared_ptr<PointCloud<PointXYZRGBA>> make_colored_cloud() const;
+  const std::vector<PointIndices> &get_clusters() const { return clusters; }
+  const std::vector<any_map> &get_clusters_info() const {
+    return clusters_info;
+  }
+
+  shared_ptr<const cloud_t> get_filtered_cloud() { return cloud; }
 
 private:
   void apply_filters() {
@@ -148,60 +155,60 @@ private:
 };
 } // end anonymous namespace
 
-template <typename PointT>
-shared_ptr<PointCloud<PointXYZRGBA>>
-cloud_pipeline_impl<PointT>::make_colored_cloud() const {
-  const rgba_color red{255, 0, 0};
-  return jarvis::make_colored_cloud(*cloud, red);
-}
-
-template <>
-shared_ptr<PointCloud<PointXYZRGBA>>
-cloud_pipeline_impl<PointXYZRGBA>::make_colored_cloud() const {
-  using std::clog;
-  using std::endl;
-  timer.run("Creating colored cloud");
-  const rgba_color green{0, 255, 0};
-  const rgba_color cyan{0, 255, 255};
-  const rgba_color magenta{255, 0, 255};
-  const rgba_color yellow{128, 128, 0};
-  std::map<std::string, rgba_color> color_map;
-  color_map["cylinder"] = green;
-  color_map["sphere"] = cyan;
-  color_map["cuboid"] = magenta;
-
-  const auto colored_cloud = make_shared<cloud_t>(*cloud);
-
-  // No plane coloring:
-  //  const size_t num_planes = plane_extractor.get_num_planes();
-  //  for (size_t i = 0; i < num_planes; ++i) {
-  //    const auto &inliers = plane_extractor.get_inliers(i);
-  //    const auto blue_scale =
-  //        static_cast<double>(inliers.indices.size()) / cloud->size();
-  //    const auto blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
-  //    colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
-  //  }
-
-  for (size_t i = 0; i < clusters.size(); ++i) {
-    //    clog << "Cluster " << i + 1 << ": ";
-    //    clog << "Size=" << clusters[i].indices.size();
-    const any_map &info = clusters_info[i];
-
-    //    for (const auto &elem : info) {
-    //      clog << ", " << elem.first << '=';
-    //      print_any(elem.second, clog);
-    //    }
-    //    clog << endl;
-
-    const auto &shape = info.get<std::string>("shape");
-    if (shape != "unknown")
-      colorize(*colored_cloud, clusters[i], color_map.at(shape));
-  }
-  clog << endl;
-
-  timer.finish();
-  return colored_cloud;
-}
+// template <typename PointT>
+// shared_ptr<PointCloud<PointXYZRGBA>>
+// cloud_pipeline_impl<PointT>::make_colored_cloud() const {
+//  const rgba_color red{255, 0, 0};
+//  return jarvis::make_colored_cloud(*cloud, red);
+//}
+//
+// template <>
+// shared_ptr<PointCloud<PointXYZRGBA>>
+// cloud_pipeline_impl<PointXYZRGBA>::make_colored_cloud() const {
+//  using std::clog;
+//  using std::endl;
+//  timer.run("Creating colored cloud");
+//  const rgba_color green{0, 255, 0};
+//  const rgba_color cyan{0, 255, 255};
+//  const rgba_color magenta{255, 0, 255};
+//  const rgba_color yellow{128, 128, 0};
+//  std::map<std::string, rgba_color> color_map;
+//  color_map["cylinder"] = green;
+//  color_map["sphere"] = cyan;
+//  color_map["cuboid"] = magenta;
+//
+//  const auto colored_cloud = make_shared<cloud_t>(*cloud);
+//
+//  // No plane coloring:
+//  //  const size_t num_planes = plane_extractor.get_num_planes();
+//  //  for (size_t i = 0; i < num_planes; ++i) {
+//  //    const auto &inliers = plane_extractor.get_inliers(i);
+//  //    const auto blue_scale =
+//  //        static_cast<double>(inliers.indices.size()) / cloud->size();
+//  //    const auto blue_val = static_cast<uint8_t>(55 + 200 * blue_scale);
+//  //    colorize(*colored_cloud, inliers, rgba_color(0, 0, blue_val));
+//  //  }
+//
+//  for (size_t i = 0; i < clusters.size(); ++i) {
+//    //    clog << "Cluster " << i + 1 << ": ";
+//    //    clog << "Size=" << clusters[i].indices.size();
+//    const any_map &info = clusters_info[i];
+//
+//    //    for (const auto &elem : info) {
+//    //      clog << ", " << elem.first << '=';
+//    //      print_any(elem.second, clog);
+//    //    }
+//    //    clog << endl;
+//
+//    const auto &shape = info.get<std::string>("shape");
+//    if (shape != "unknown")
+//      colorize(*colored_cloud, clusters[i], color_map.at(shape));
+//  }
+//  clog << endl;
+//
+//  timer.finish();
+//  return colored_cloud;
+//}
 
 // ==========================================
 // cloud_pipeline
@@ -211,7 +218,67 @@ template <typename PointT>
 void cloud_pipeline<PointT>::process(const cloud_const_ptr &input_cloud) {
   cloud_pipeline_impl<PointT> pipeline(input_cloud);
   pipeline.run();
-  colored_cloud = pipeline.make_colored_cloud();
+  filtered_cloud = pipeline.get_filtered_cloud();
+  clusters = pipeline.get_clusters();
+}
+
+template <>
+void pipeline_searcher<PointXYZRGBA>::update_cloud(
+    cloud_const_ptr input_cloud) {
+
+  for (size_t i = 0; i < last_num_of_clusters; ++i)
+    vis.remove_text_3d("cluster_" + std::to_string(i));
+
+  cloud_pipeline_impl<PointXYZRGBA> pipeline(input_cloud);
+  pipeline.run();
+  const auto &cloud = pipeline.get_filtered_cloud();
+  const auto &clusters = pipeline.get_clusters();
+  const auto &clusters_info = pipeline.get_clusters_info();
+  last_num_of_clusters = clusters.size();
+
+  const auto colored_cloud = make_shared<cloud_t>(*cloud);
+  for (auto &p : *colored_cloud)
+    p.x = -p.x;
+
+  const rgba_color green{0, 255, 0};
+  const rgba_color cyan{0, 255, 255};
+  const rgba_color magenta{255, 0, 255};
+  const rgba_color yellow{128, 128, 0};
+  std::map<std::string, rgba_color> color_map;
+  color_map["cylinder"] = green;
+  color_map["sphere"] = cyan;
+  color_map["cuboid"] = magenta;
+
+  using std::clog;
+  using std::endl;
+
+  for (size_t i = 0; i < clusters.size(); ++i) {
+    const any_map &info = clusters_info[i];
+
+    const auto &shape = info.get<std::string>("shape");
+    if (shape != "unknown")
+      colorize(*colored_cloud, clusters[i], color_map.at(shape));
+  }
+
+  // vis.show_cloud(input_cloud, "input_cloud");
+  vis.show_cloud(colored_cloud);
+
+  for (size_t i = 0; i < clusters.size(); ++i) {
+    const any_map &info = clusters_info[i];
+    std::ostringstream oss;
+    // oss << "Cluster " << i + 1 << ":\n";
+    // oss << "size=" << clusters[i].indices.size() << '\n';
+    for (const auto &elem : info) {
+      oss << elem.first << '=';
+      print_any(elem.second, oss);
+      oss << '\n';
+    }
+    const auto point =
+        (*colored_cloud)[static_cast<size_t>(clusters[i].indices[0])];
+    const auto &shape = info.get<std::string>("shape");
+    if (shape != "unknown")
+      vis.add_text_3d(oss.str(), point, "cluster_" + std::to_string(i));
+  }
 }
 
 // ==========================================
@@ -220,3 +287,6 @@ void cloud_pipeline<PointT>::process(const cloud_const_ptr &input_cloud) {
 
 template class jarvis::cloud_pipeline<pcl::PointXYZ>;
 template class jarvis::cloud_pipeline<pcl::PointXYZRGBA>;
+
+template class jarvis::pipeline_searcher<pcl::PointXYZ>;
+template class jarvis::pipeline_searcher<pcl::PointXYZRGBA>;

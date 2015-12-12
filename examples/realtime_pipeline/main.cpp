@@ -26,9 +26,8 @@ int main() {
   steady_timer timer;
   openni_grabber<point_t> grabber(true);
   boost::shared_ptr<const PointCloud<point_t>> cloud;
-  cloud_pipeline<point_t> pipeline;
-  simple_visualizer<pcl::PointXYZRGBA> vis;
-  vis.start();
+  pipeline_searcher<point_t> searcher(true);
+  searcher.start();
   size_t num_processed_frames = 0;
   static std::atomic<bool> signaled{false};
   std::signal(SIGINT, [](int) { signaled = true; });
@@ -36,14 +35,9 @@ int main() {
   timer.run("Processing frames");
   while (!signaled) {
     grabber.grab(cloud);
-    pipeline.process(cloud);
+    searcher.update_cloud(cloud);
     ++num_processed_frames;
-    const auto colored_cloud = pipeline.get_colored_cloud();
-    for (auto &p : colored_cloud->points)
-      p.x = -p.x;
-    vis.show_cloud(colored_cloud);
-    // vis.show_cloud(cloud);
-    vis.spin_once();
+    searcher.spin_once();
   }
   auto elapsed = timer.finish();
   const double elapsed_seconds = duration<double>(elapsed).count();
