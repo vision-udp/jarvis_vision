@@ -222,12 +222,26 @@ void cloud_pipeline<PointT>::process(const cloud_const_ptr &input_cloud) {
   clusters = pipeline.get_clusters();
 }
 
+// ==========================================
+// pipeline_searcher
+// ==========================================
+
+static std::string generate_info_string(const any_map &info) {
+  std::ostringstream oss;
+  for (const auto &elem : info) {
+    oss << elem.first << '=';
+    print_any(elem.second, oss);
+    oss << '\n';
+  }
+  return oss.str();
+}
+
 template <>
 void pipeline_searcher<PointXYZRGBA>::update_cloud(
     cloud_const_ptr input_cloud) {
 
   for (size_t i = 0; i < last_num_of_clusters; ++i)
-    vis.remove_text_3d("cluster_" + std::to_string(i));
+    vis.remove_text_3d("text_" + std::to_string(i));
 
   cloud_pipeline_impl<PointXYZRGBA> pipeline(input_cloud);
   pipeline.run();
@@ -235,10 +249,6 @@ void pipeline_searcher<PointXYZRGBA>::update_cloud(
   const auto &clusters = pipeline.get_clusters();
   const auto &clusters_info = pipeline.get_clusters_info();
   last_num_of_clusters = clusters.size();
-
-  const auto colored_cloud = make_shared<cloud_t>(*cloud);
-  for (auto &p : *colored_cloud)
-    p.x = -p.x;
 
   const rgba_color green{0, 255, 0};
   const rgba_color cyan{0, 255, 255};
@@ -249,36 +259,24 @@ void pipeline_searcher<PointXYZRGBA>::update_cloud(
   color_map["sphere"] = cyan;
   color_map["cuboid"] = magenta;
 
-  using std::clog;
-  using std::endl;
-
+  const auto colored_cloud = make_shared<cloud_t>(*cloud);
   for (size_t i = 0; i < clusters.size(); ++i) {
     const any_map &info = clusters_info[i];
 
     const auto &shape = info.get<std::string>("shape");
-    if (shape != "unknown")
-      colorize(*colored_cloud, clusters[i], color_map.at(shape));
+    if (shape == "unknown")
+      continue;
+
+    assert(!clusters[i].indices.empty());
+
+    colorize(*colored_cloud, clusters[i], color_map.at(shape));
+    const auto representative_point =
+        (*cloud)[static_cast<size_t>(clusters[i].indices[0])];
+    vis.add_text_3d(generate_info_string(info), representative_point,
+                    "text_" + std::to_string(i));
   }
 
-  // vis.show_cloud(input_cloud, "input_cloud");
-  vis.show_cloud(colored_cloud);
-
-  for (size_t i = 0; i < clusters.size(); ++i) {
-    const any_map &info = clusters_info[i];
-    std::ostringstream oss;
-    // oss << "Cluster " << i + 1 << ":\n";
-    // oss << "size=" << clusters[i].indices.size() << '\n';
-    for (const auto &elem : info) {
-      oss << elem.first << '=';
-      print_any(elem.second, oss);
-      oss << '\n';
-    }
-    const auto point =
-        (*colored_cloud)[static_cast<size_t>(clusters[i].indices[0])];
-    const auto &shape = info.get<std::string>("shape");
-    if (shape != "unknown")
-      vis.add_text_3d(oss.str(), point, "cluster_" + std::to_string(i));
-  }
+  vis.show_cloud(colored_cloud, "cloud");
 }
 
 // ==========================================

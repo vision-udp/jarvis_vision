@@ -53,6 +53,11 @@ void simple_visualizer<PointT>::show_cloud(const cloud_ptr &cloud,
 }
 
 template <typename PointT>
+void simple_visualizer<PointT>::remove_all_point_clouds() {
+  viewer->removeAllPointClouds();
+}
+
+template <typename PointT>
 void simple_visualizer<PointT>::add_text_3d(const std::string &text,
                                             const PointT pos,
                                             const std::string &id) {
